@@ -8,8 +8,8 @@ locations:
     longitude: 141.96414846972124
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 10.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0

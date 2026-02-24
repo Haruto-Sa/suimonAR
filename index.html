@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AR デモ ハブ</title>
+    <title>suimonAR</title>
     <link rel="stylesheet" href="styles.css" />
     <link
       rel="stylesheet"
@@ -37,26 +37,26 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>AR デモ ハブ</h1>
-      <p class="lead">必要なページだけをまとめています。ロケーションAR、マーカーAR、Matterportを利用できます。</p>
+      <h1>suimonAR</h1>
+      <p class="lead">ロケーションAR、マーカーAR、Matterportを利用できます。</p>
 
       <div class="grid">
         <div class="card">
           <div class="card-icon">📍</div>
           <h2>ロケーションAR</h2>
-          <p>確認用は`locations.yaml`、本番用は`locations-heiRiver.yaml`を使用します。確認用で調整したYAMLを本番へ反映できます。</p>
+          <p>確認用で調整した内容を公開用へ反映できます。</p>
           <div class="card-actions">
-            <a class="btn" href="location-ar-check.html">確認用を開く</a>
-            <a class="btn-outline" href="location-ar-prod.html">本番用を開く</a>
+            <a class="btn" href="location-ar-check.html">確認用</a>
+            <a class="btn-outline" href="location-ar-prod.html">公開用</a>
           </div>
         </div>
 
         <div class="card">
           <div class="card-icon">🔍</div>
           <h2>マーカーベースAR</h2>
-          <p>Hiroマーカーで水門モデルを表示します。拡大縮小操作に対応しています。</p>
+          <p>Hiroマーカーで水門モデルを表示。拡大縮小操作に対応。</p>
           <div class="card-actions">
-            <a class="btn" href="marker-ar.html">マーカーARを開く</a>
+            <a class="btn" href="marker-ar.html">マーカーAR</a>
             <a class="btn-outline" href="marker-print.html">印刷ページ</a>
           </div>
         </div>
@@ -64,7 +64,7 @@
         <div class="card">
           <div class="card-icon">🏠</div>
           <h2>Matterport</h2>
-          <p>ページ内埋め込みで Matterport 空間を表示します。</p>
+          <p>ページ内埋め込みで Matterport 空間を表示。</p>
           <div class="card-actions">
             <a class="btn" href="matterport.html">Matterport を開く</a>
           </div>
@@ -83,11 +83,11 @@
 
       <div class="map-section">
         <h2>水門地点マップ</h2>
-        <p>config/locations.yaml に定義された地点を OpenStreetMap 上にプロット。</p>
+        <p>OpenStreetMap 上に指定した地点をプロット。</p>
         <div id="locations-map"></div>
       </div>
 
-      <div class="note">カメラと位置情報の許可が必要です（HTTPS または localhost 推奨）。</div>
+      <div class="note">カメラと位置情報の許可が必要です。</div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     <script

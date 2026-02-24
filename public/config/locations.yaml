@@ -10,8 +10,8 @@ locations:
     longitude: 141.13317980590008
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -25,8 +25,8 @@ locations:
     longitude: 141.13606258796432
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -40,8 +40,8 @@ locations:
     longitude: 141.1355385713421
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -55,8 +55,8 @@ locations:
     longitude: 141.13434547274002
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -70,8 +70,8 @@ locations:
     longitude: 141.13296978414344
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -85,8 +85,8 @@ locations:
     longitude: 141.96414846972124
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -100,8 +100,8 @@ locations:
     longitude: 141.96373830514798
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -115,8 +115,8 @@ locations:
     longitude: 141.96407094491778
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -130,8 +130,8 @@ locations:
     longitude: 141.96394910571527
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -145,8 +145,8 @@ locations:
     longitude: 141.96390779779443
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -160,8 +160,8 @@ locations:
     longitude: 141.12411389547805
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
@@ -175,8 +175,8 @@ locations:
     longitude: 141.12382711660644
     baseAltitudeMeters: 0
     realHeightMeters: 8.5
-    defaultHeight: -5
-    defaultSize: 1.0
+    defaultHeight: 10
+    defaultSize: 5.0
     defaultRotationY: -2
     offsetEast: 0
     offsetNorth: 0
