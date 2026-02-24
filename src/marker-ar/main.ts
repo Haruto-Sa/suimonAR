@@ -1,44 +1,23 @@
-import { MODEL_URLS, ModelKey } from '../models';
+import { MODEL_URLS } from '../models';
 
-// js-yaml を CDN から読み込んでいるため、グローバル宣言
-declare const jsyaml: any;
-
-// Vite の base 設定（本番は /sumionAR/）を持ってくる。
-// ローカルで / に置いたまま開いているときは、ここでパスを補正する。
 const BUILD_BASE = (import.meta as any).env?.BASE_URL ?? '/';
 
-type ModelYamlEntry = {
-  id: string;
-  kind?: string;
-  glb?: string;
-};
+const INITIAL_SCALE = 0.004;
+const MIN_SCALE = 0.001;
+const MAX_SCALE = 0.02;
+const SCALE_STEP_UP = 1.1;
+const SCALE_STEP_DOWN = 0.9;
 
-type ModelsYaml = {
-  models?: ModelYamlEntry[];
-};
+let currentScale = INITIAL_SCALE;
+let pinchStartDistance = 0;
+let pinchStartScale = INITIAL_SCALE;
 
-const GLB_NAME_TO_KEY: Record<string, ModelKey> = {
-  'Duck.glb': 'duck',
-  'suimon-kousin.glb': 'suimon',
-  'wankosoba.glb': 'wankosoba',
-};
-
-// models.yaml が壊れていても最低限表示できるように、デフォルトマッピングを用意
-const DEFAULT_ID_TO_KEY: Record<string, ModelKey> = {
-  duck: 'duck',
-  suimon: 'suimon',
-  wankosoba: 'wankosoba',
-};
-
-// base が一致しない環境（例: ローカルで dist を / に置いた場合）でも
-// アセットを取得できるように、ビルド時の base を取り除いたパスを返す
 function normalizeAssetUrl(url: string): string {
   const base = BUILD_BASE.endsWith('/') ? BUILD_BASE : `${BUILD_BASE}/`;
   if (base === '/' || window.location.pathname.startsWith(base)) {
     return url;
   }
 
-  // 例）url: /sumionAR/assets/xxx → /assets/xxx に変換
   if (url.startsWith(base)) {
     const stripped = url.substring(base.length - 1);
     return stripped.startsWith('/') ? stripped : `/${stripped}`;
@@ -47,62 +26,111 @@ function normalizeAssetUrl(url: string): string {
   return url;
 }
 
-async function loadModelsConfig(): Promise<Record<string, ModelKey>> {
-  const mapping: Record<string, ModelKey> = {};
-  try {
-    if (typeof jsyaml === 'undefined' || typeof jsyaml.load !== 'function') {
-      return mapping;
-    }
-    const res = await fetch('config/models.yaml', { cache: 'no-store' });
-    if (!res.ok) return mapping;
-    const text = await res.text();
-    const parsed = jsyaml.load(text) as ModelsYaml | undefined;
-    const list = Array.isArray(parsed?.models) ? parsed!.models! : [];
-    for (const m of list) {
-      if (!m || typeof m.id !== 'string') continue;
-      let key: ModelKey | undefined;
-      if (m.glb && GLB_NAME_TO_KEY[m.glb]) {
-        key = GLB_NAME_TO_KEY[m.glb];
-      } else if (m.kind && (['duck', 'suimon', 'wankosoba'] as string[]).includes(m.kind)) {
-        key = m.kind as ModelKey;
-      }
-      if (key) {
-        mapping[m.id] = key;
-      }
-    }
-  } catch (error) {
-    console.warn('[marker-ar] models.yaml load failed', error);
-  }
-  return mapping;
+function clampScale(value: number): number {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
 }
 
-async function setModelSrcByDataAttribute(): Promise<void> {
-  const configMap = await loadModelsConfig();
-  // models.yaml の設定をマージしつつ、足りない ID はデフォルトにフォールバック
-  const idToKey: Record<string, ModelKey> = {
-    ...DEFAULT_ID_TO_KEY,
-    ...configMap,
-    // UI ボタン用の「wanko」もここで定義しておく
-    wanko: 'wankosoba',
-  };
+function applyScale(value: number): void {
+  currentScale = clampScale(value);
+  const model = document.getElementById('model-suimon') as HTMLElement | null;
+  if (model) {
+    const raw = currentScale.toFixed(4);
+    model.setAttribute('scale', `${raw} ${raw} ${raw}`);
+  }
 
-  // マーカー上の 3D モデルエンティティに直接 URL を設定する
-  const nodes = document.querySelectorAll<HTMLElement>('[data-model-entity]');
+  const label = document.getElementById('zoom-value');
+  if (label) {
+    const percent = Math.round((currentScale / INITIAL_SCALE) * 100);
+    label.textContent = `${percent}%`;
+  }
+}
+
+function setSuimonModelSrc(): void {
+  const suimonUrl = normalizeAssetUrl(MODEL_URLS.suimon);
+
+  const nodes = document.querySelectorAll<HTMLElement>('[data-model-entity="suimon"]');
   nodes.forEach((el) => {
-    const id = el.getAttribute('data-model-entity') || '';
-    const key = idToKey[id];
-    const url = key ? normalizeAssetUrl(MODEL_URLS[key]) : undefined;
-    if (url) {
-      // A-Frame の gltf-model コンポーネントは url(...) 形式を推奨
-      el.setAttribute('gltf-model', `url(${url})`);
-      // デバッグ用ログ（モバイル Safari でも DevTools 経由で確認しやすいように）
-      console.log('[marker-ar] set model src', { id, key, url });
-    } else {
-      console.warn('[marker-ar] unknown model id, skip', id);
-    }
+    el.setAttribute('gltf-model', `url(${suimonUrl})`);
+    el.setAttribute('visible', 'true');
+  });
+
+  applyScale(INITIAL_SCALE);
+  console.log('[marker-ar] suimon model src set', { url: suimonUrl, count: nodes.length });
+}
+
+function setupPanelToggle(): void {
+  const panel = document.getElementById('marker-panel');
+  const hideBtn = document.getElementById('marker-panel-toggle');
+  const restoreBtn = document.getElementById('marker-panel-restore');
+  if (!panel || !hideBtn || !restoreBtn) return;
+
+  hideBtn.addEventListener('click', () => {
+    panel.classList.add('hidden');
+    restoreBtn.classList.add('visible');
+  });
+
+  restoreBtn.addEventListener('click', () => {
+    panel.classList.remove('hidden');
+    restoreBtn.classList.remove('visible');
   });
 }
 
-// DOMContentLoaded を待たずに（モジュール実行直後に）適用して、
-// A-Frame の初期化より前に src が入るようにする
-void setModelSrcByDataAttribute();
+function setupZoomButtons(): void {
+  const zoomIn = document.getElementById('zoom-in') as HTMLButtonElement | null;
+  const zoomOut = document.getElementById('zoom-out') as HTMLButtonElement | null;
+  if (!zoomIn || !zoomOut) return;
+
+  zoomIn.addEventListener('click', () => {
+    applyScale(currentScale * SCALE_STEP_UP);
+  });
+
+  zoomOut.addEventListener('click', () => {
+    applyScale(currentScale * SCALE_STEP_DOWN);
+  });
+}
+
+function getTouchDistance(t1: Touch, t2: Touch): number {
+  const dx = t1.clientX - t2.clientX;
+  const dy = t1.clientY - t2.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function setupPinchZoom(): void {
+  window.addEventListener(
+    'touchstart',
+    (event) => {
+      if (event.touches.length !== 2) return;
+      pinchStartDistance = getTouchDistance(event.touches[0], event.touches[1]);
+      pinchStartScale = currentScale;
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'touchmove',
+    (event) => {
+      if (event.touches.length !== 2 || pinchStartDistance <= 0) return;
+      const currentDistance = getTouchDistance(event.touches[0], event.touches[1]);
+      if (!Number.isFinite(currentDistance) || currentDistance <= 0) return;
+      const nextScale = pinchStartScale * (currentDistance / pinchStartDistance);
+      applyScale(nextScale);
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+
+  window.addEventListener(
+    'touchend',
+    (event) => {
+      if (event.touches.length < 2) {
+        pinchStartDistance = 0;
+      }
+    },
+    { passive: true }
+  );
+}
+
+setSuimonModelSrc();
+setupPanelToggle();
+setupZoomButtons();
+setupPinchZoom();

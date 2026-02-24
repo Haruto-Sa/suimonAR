@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AR デモ ハブ</title>
     <link rel="stylesheet" href="styles.css" />
-    <!-- Leaflet (OpenStreetMap) -->
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -15,15 +14,21 @@
       body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0c1018; color: #f7f9fc; }
       .wrap { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
       h1 { margin: 0 0 6px; font-size: 28px; }
-      p.lead { margin: 0 0 20px; opacity: 0.8; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-      .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px 18px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); }
+      p.lead { margin: 0 0 24px; opacity: 0.8; line-height: 1.6; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+      .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px 20px 16px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: flex; flex-direction: column; }
+      .card-icon { font-size: 32px; margin-bottom: 8px; }
       .card h2 { margin: 0 0 8px; font-size: 18px; }
-      .card p { margin: 0 0 12px; line-height: 1.6; opacity: 0.9; }
-      .btn { display: inline-block; padding: 10px 14px; border-radius: 10px; background: linear-gradient(135deg, #4e9bff, #6ad0ff); color: #0c1018; font-weight: 700; text-decoration: none; }
+      .card p { margin: 0 0 14px; line-height: 1.6; opacity: 0.9; flex: 1; }
+      .card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .btn { display: inline-block; padding: 10px 14px; border-radius: 10px; background: linear-gradient(135deg, #4e9bff, #6ad0ff); color: #0c1018; font-weight: 700; text-decoration: none; font-size: 14px; }
+      .btn-outline { display: inline-block; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.06); color: #f7f9fc; font-weight: 600; text-decoration: none; font-size: 14px; }
       .note { margin-top: 24px; font-size: 14px; opacity: 0.75; line-height: 1.6; }
-      .marker { margin-top: 24px; text-align: center; }
-      .marker img { max-width: 220px; width: 100%; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); }
+      .marker-section { margin-top: 24px; padding: 18px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 12px 32px rgba(0,0,0,0.25); }
+      .marker-section h2 { margin: 0 0 8px; font-size: 18px; }
+      .marker-section p { margin: 0 0 12px; font-size: 14px; opacity: 0.86; line-height: 1.6; }
+      .marker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+      .marker-row img { width: 160px; max-width: 48vw; border-radius: 10px; border: 2px solid rgba(255,255,255,0.22); background: #fff; }
       .map-section { margin-top: 32px; }
       .map-section h2 { margin: 0 0 8px; font-size: 18px; }
       .map-section p { margin: 0 0 12px; font-size: 14px; opacity: 0.8; }
@@ -33,25 +38,47 @@
   <body>
     <div class="wrap">
       <h1>AR デモ ハブ</h1>
-      <p class="lead">Hiro マーカー AR と、水門付近の固定地点 AR（suimon.yaml ベース）の 2 ページ構成です。</p>
+      <p class="lead">必要なページだけをまとめています。ロケーションAR、マーカーAR、Matterportを利用できます。</p>
 
       <div class="grid">
         <div class="card">
-          <h2>Hiro マーカー AR</h2>
-          <p>Hiro マーカー上に 3 つの GLB (Duck / Suimon / Wankosoba) を表示するデモ。</p>
-          <a class="btn" href="marker-ar.html">開く</a>
+          <div class="card-icon">📍</div>
+          <h2>ロケーションAR</h2>
+          <p>確認用は`locations.yaml`、本番用は`locations-heiRiver.yaml`を使用します。確認用で調整したYAMLを本番へ反映できます。</p>
+          <div class="card-actions">
+            <a class="btn" href="location-ar-check.html">確認用を開く</a>
+            <a class="btn-outline" href="location-ar-prod.html">本番用を開く</a>
+          </div>
         </div>
 
         <div class="card">
-          <h2>固定地点 AR（suimon ベース）</h2>
-          <p>suimon.yaml / targets.yaml の座標を元に、水門周辺の固定地点に Duck / Suimon / Wankosoba モデルを配置するロケーション AR。</p>
-          <a class="btn" href="location-ar.html">開く</a>
+          <div class="card-icon">🔍</div>
+          <h2>マーカーベースAR</h2>
+          <p>Hiroマーカーで水門モデルを表示します。拡大縮小操作に対応しています。</p>
+          <div class="card-actions">
+            <a class="btn" href="marker-ar.html">マーカーARを開く</a>
+            <a class="btn-outline" href="marker-print.html">印刷ページ</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🏠</div>
+          <h2>Matterport</h2>
+          <p>ページ内埋め込みで Matterport 空間を表示します。</p>
+          <div class="card-actions">
+            <a class="btn" href="matterport.html">Matterport を開く</a>
+          </div>
         </div>
       </div>
 
-      <div class="marker">
-        <p>マーカーページ用 Hiro 画像</p>
-        <img src="./assets/markers/hiro.png" alt="hiro marker" />
+      <div class="marker-section">
+        <h2>Hiroマーカー（すぐ表示）</h2>
+        <p>下の画像を表示して読み取るか、印刷ページからA4印刷してください。</p>
+        <div class="marker-row">
+          <img src="assets/markers/hiro.png" alt="Hiro marker" />
+          <a class="btn" href="marker-ar.html">このままマーカーARへ</a>
+          <a class="btn-outline" href="marker-print.html">印刷ページへ</a>
+        </div>
       </div>
 
       <div class="map-section">
@@ -60,11 +87,8 @@
         <div id="locations-map"></div>
       </div>
 
-      <div class="note">
-        ・カメラと位置情報の許可が必要です（HTTPS または localhost 推奨）<br />
-      </div>
+      <div class="note">カメラと位置情報の許可が必要です（HTTPS または localhost 推奨）。</div>
     </div>
-    <!-- js-yaml & Leaflet JS -->
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -72,43 +96,42 @@
     ></script>
     <script>
       (async function initLocationsMap() {
-        const mapEl = document.getElementById('locations-map');
+        var mapEl = document.getElementById('locations-map');
         if (!mapEl || typeof L === 'undefined') return;
 
-        const map = L.map('locations-map', { zoomControl: true });
+        var map = L.map('locations-map', { zoomControl: true });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
         try {
-          const res = await fetch('config/locations.yaml', { cache: 'no-store' });
+          var res = await fetch('config/locations.yaml', { cache: 'no-store' });
           if (!res.ok) throw new Error('HTTP ' + res.status);
-          const text = await res.text();
-          const parsed = (typeof jsyaml !== 'undefined' && jsyaml.load)
+          var text = await res.text();
+          var parsed = (typeof jsyaml !== 'undefined' && jsyaml.load)
             ? jsyaml.load(text)
             : null;
-          const raw = Array.isArray(parsed?.locations)
+          var raw = Array.isArray(parsed?.locations)
             ? parsed.locations
             : Array.isArray(parsed)
             ? parsed
             : [];
 
-          const latlngs = [];
-          raw.forEach((loc) => {
-            const lat = Number(loc.latitude ?? loc.lat);
-            const lon = Number(loc.longitude ?? loc.lon);
+          var latlngs = [];
+          raw.forEach(function(loc) {
+            var lat = Number(loc.latitude ?? loc.lat);
+            var lon = Number(loc.longitude ?? loc.lon);
             if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
             latlngs.push([lat, lon]);
-            const name = (loc.name || loc.id || '地点').toString();
-            const icon = (loc.icon || '📍').toString();
+            var name = (loc.name || loc.id || '地点').toString();
+            var icon = (loc.icon || '📍').toString();
             L.marker([lat, lon]).addTo(map).bindPopup(icon + ' ' + name);
           });
 
           if (latlngs.length) {
             map.fitBounds(latlngs, { padding: [20, 20] });
           } else {
-            // デフォルト: 盛岡周辺（適宜変更可）
             map.setView([39.7021, 141.1544], 14);
           }
         } catch (e) {

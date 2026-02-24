@@ -1,51 +1,185 @@
-# 位置情報のみを定義する YAML
-# suimon.yaml / targets.yaml を参考に、水門まわりの5地点をまとめています。
+# ロケーションAR設定（確認用）
+# 確認用ページの「設定コピー」で出力される形式と同一です。
+# 必須: id, latitude, longitude
+# 推奨: baseAltitudeMeters, realHeightMeters, defaultHeight, defaultSize, defaultRotationY, offsetEast, offsetNorth, model
+
 locations:
-  - id: suimon-1
-    name: "水門 #1"
+  - id: morioka-1
+    name: "盛岡(滝沢-県立大学) #1"
     latitude: 39.80219519075745
     longitude: 141.13317980590008
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
 
-  - id: suimon-2
-    name: "水門 #2"
+  - id: morioka-2
+    name: "盛岡(滝沢-県立大学) #2"
     latitude: 39.80314253510342
     longitude: 141.13606258796432
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
 
-  - id: suimon-3
-    name: "水門 #3"
+  - id: morioka-3
+    name: "盛岡(滝沢-県立大学) #3"
     latitude: 39.802007370732724
     longitude: 141.1355385713421
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
 
-  - id: suimon-4
-    name: "水門 #4"
+  - id: morioka-4
+    name: "盛岡(滝沢-県立大学) #4"
     latitude: 39.80279443153987
     longitude: 141.13434547274002
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
 
-  - id: suimon-5
-    name: "水門 #5"
+  - id: morioka-5
+    name: "盛岡(滝沢-県立大学) #5"
     latitude: 39.80336650658442
     longitude: 141.13296978414344
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
 
-  - id: suimon-6
-    name: "水門 #6"
+  - id: miyako-1
+    name: "宮古 #1"
+    latitude: 39.6395435045501
+    longitude: 141.96414846972124
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🌊"
+    color: "#4e9bff"
+
+  - id: miyako-2
+    name: "宮古 #2"
+    latitude: 39.63951101986379
+    longitude: 141.96373830514798
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🌊"
+    color: "#4e9bff"
+
+  - id: miyako-3
+    name: "宮古 #3"
+    latitude: 39.639440797446206
+    longitude: 141.96407094491778
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🌊"
+    color: "#4e9bff"
+
+  - id: miyako-4
+    name: "宮古 #4"
+    latitude: 39.638936571671266
+    longitude: 141.96394910571527
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🌊"
+    color: "#4e9bff"
+
+  - id: miyako-5
+    name: "宮古 #5"
+    latitude: 39.63840286178821
+    longitude: 141.96390779779443
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🌊"
+    color: "#4e9bff"
+
+  - id: kitakami-1
+    name: "北上 #1"
     latitude: 39.29844365684667
     longitude: 141.12411389547805
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
 
-  - id: suimon-7
-    name: "水門 #7"
+  - id: kitakami-2
+    name: "北上 #2"
     latitude: 39.299216494142705
     longitude: 141.12382711660644
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"

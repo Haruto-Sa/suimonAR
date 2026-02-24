@@ -1,0 +1,18 @@
+# ロケーションAR設定（本番用）
+# location-ar-check.html の「設定コピー」結果をそのまま貼り付け可能な形式。
+
+locations:
+  - id: heigawa-suimon
+    name: "閉伊川水門"
+    latitude: 39.6395435045501
+    longitude: 141.96414846972124
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: -5
+    defaultSize: 1.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🚪"
+    color: "#4e9bff"

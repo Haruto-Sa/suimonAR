@@ -7,7 +7,7 @@ export default defineConfig({
     host: true,
     port: 8000,
     strictPort: true,
-    allowedHosts: ['*'],
+    allowedHosts: ['.trycloudflare.com'],
     cors: true,
   },
   build: {
@@ -16,6 +16,11 @@ export default defineConfig({
         main: 'index.html',
         'marker-ar': 'marker-ar.html',
         'location-ar': 'location-ar.html',
+        'location-ar-check': 'location-ar-check.html',
+        'location-ar-prod': 'location-ar-prod.html',
+        'heiRiver-ar': 'heiRiver-ar.html',
+        'marker-print': 'marker-print.html',
+        matterport: 'matterport.html',
       }
     }
   }

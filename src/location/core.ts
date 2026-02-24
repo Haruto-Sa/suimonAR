@@ -15,6 +15,10 @@ export function metersToLonDelta(meters: number, latDeg: number): number {
 }
 
 const DEFAULT_VIDEO_ELEMENT_ID = 'locar-video-feed';
+const ORIENTATION_WATCHDOG_MS = 5000;
+const TOUCH_SENSITIVITY = 0.004;
+const PITCH_LIMIT = Math.PI * 0.45;
+const GPS_SMOOTHING_WINDOW = 5;
 
 type PendingPlacement = {
   object: THREE.Object3D;
@@ -30,6 +34,8 @@ export type LocationSceneOptions = {
   facingMode?: 'environment' | 'user';
 };
 
+type OrientationStatus = 'pending' | 'sensor' | 'touch';
+
 export class LocationScene {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -44,6 +50,21 @@ export class LocationScene {
   private isDisposed = false;
   private readonly handleResize = () => this.onResize();
   private readonly handleBeforeUnload = () => this.dispose();
+  private gpsCallbacks: Array<(pos: { latitude: number; longitude: number; accuracy: number; altitude: number | null }) => void> = [];
+  private gpsSamples: Array<{ latitude: number; longitude: number; accuracy: number; altitude: number | null }> = [];
+
+  private _orientationStatus: OrientationStatus = 'pending';
+  private orientationEventReceived = false;
+  private orientationStatusCallbacks: Array<(status: OrientationStatus) => void> = [];
+  private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private touchYaw = 0;
+  private touchPitch = 0;
+  private touchActive = false;
+  private touchStartX = 0;
+  private touchStartY = 0;
+  private touchPrevX = 0;
+  private touchPrevY = 0;
 
   constructor(options: LocationSceneOptions = {}) {
     this.scene = new THREE.Scene();
@@ -108,11 +129,41 @@ export class LocationScene {
     });
 
     if (this.locationBased.on) {
-      this.locationBased.on('gpsupdate', () => {
+      this.locationBased.on('gpsupdate', (payload: any) => {
+        const gpsEvent =
+          payload && typeof payload === 'object' && 'position' in payload
+            ? payload
+            : null;
+        const position = gpsEvent?.position ?? payload;
         if (!this.originReady) {
           this.originReady = true;
+          console.log('[LocationScene] GPS origin established');
         }
         this.flushPendingAdds();
+
+        try {
+          const coords = position?.coords ?? position;
+          if (coords && typeof coords.latitude === 'number') {
+            const raw = {
+              latitude: coords.latitude as number,
+              longitude: coords.longitude as number,
+              accuracy: (coords.accuracy as number) ?? 0,
+              altitude:
+                typeof coords.altitude === 'number' && Number.isFinite(coords.altitude)
+                  ? (coords.altitude as number)
+                  : null,
+            };
+            if (raw.altitude !== null) {
+              this.locationBased?.setElevation(raw.altitude);
+            }
+            const data = this.smoothGps(raw);
+            for (const cb of this.gpsCallbacks) {
+              cb(data);
+            }
+          }
+        } catch (e) {
+          console.warn('[LocationScene] GPS callback dispatch error', e);
+        }
       });
       this.locationBased.on('gpserror', (error: GeolocationPositionError) => {
         console.warn('[LocationScene] GPS 取得中にエラーが発生しました', error);
@@ -142,11 +193,126 @@ export class LocationScene {
     this.deviceControls.init();
     this.deviceControls.connect();
 
+    this.setupOrientationWatchdog();
+    this.setupTouchControls();
+
     window.addEventListener('resize', this.handleResize);
     window.addEventListener('beforeunload', this.handleBeforeUnload);
 
     this.animate();
   }
+
+  // --- Orientation watchdog ---
+
+  private setupOrientationWatchdog(): void {
+    const handler = () => {
+      if (this.orientationEventReceived) return;
+      this.orientationEventReceived = true;
+      this.setOrientationStatus('sensor');
+      window.removeEventListener('deviceorientation', handler);
+      window.removeEventListener('deviceorientationabsolute', handler);
+      console.log('[LocationScene] deviceorientation event detected -> sensor mode');
+    };
+
+    window.addEventListener('deviceorientation', handler);
+    window.addEventListener('deviceorientationabsolute', handler);
+
+    this.watchdogTimer = setTimeout(() => {
+      if (!this.orientationEventReceived) {
+        this.setOrientationStatus('touch');
+        console.log('[LocationScene] No deviceorientation events -> touch fallback mode');
+      }
+      window.removeEventListener('deviceorientation', handler);
+      window.removeEventListener('deviceorientationabsolute', handler);
+    }, ORIENTATION_WATCHDOG_MS);
+  }
+
+  private setOrientationStatus(status: OrientationStatus): void {
+    if (this._orientationStatus === status) return;
+    this._orientationStatus = status;
+    for (const cb of this.orientationStatusCallbacks) {
+      try { cb(status); } catch (e) { console.warn('[LocationScene] orientation status callback error', e); }
+    }
+  }
+
+  /** Re-run the watchdog after iOS permission is granted */
+  restartOrientationDetection(): void {
+    this.orientationEventReceived = false;
+    this._orientationStatus = 'pending';
+    if (this.watchdogTimer) {
+      clearTimeout(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+    this.setupOrientationWatchdog();
+  }
+
+  // --- Touch drag fallback ---
+
+  private setupTouchControls(): void {
+    const el = this.renderer.domElement;
+
+    el.addEventListener('touchstart', (e: TouchEvent) => {
+      if (this._orientationStatus === 'sensor') return;
+      if (e.touches.length !== 1) return;
+      this.touchActive = true;
+      this.touchStartX = e.touches[0].clientX;
+      this.touchStartY = e.touches[0].clientY;
+      this.touchPrevX = this.touchStartX;
+      this.touchPrevY = this.touchStartY;
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e: TouchEvent) => {
+      if (!this.touchActive || this._orientationStatus === 'sensor') return;
+      if (e.touches.length !== 1) return;
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      const dx = x - this.touchPrevX;
+      const dy = y - this.touchPrevY;
+      this.touchYaw -= dx * TOUCH_SENSITIVITY;
+      this.touchPitch -= dy * TOUCH_SENSITIVITY;
+      this.touchPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.touchPitch));
+      this.touchPrevX = x;
+      this.touchPrevY = y;
+    }, { passive: true });
+
+    el.addEventListener('touchend', () => {
+      this.touchActive = false;
+    }, { passive: true });
+
+    el.addEventListener('touchcancel', () => {
+      this.touchActive = false;
+    }, { passive: true });
+
+    // Mouse fallback for desktop
+    let mouseDown = false;
+    let mouseX = 0;
+    let mouseY = 0;
+    el.addEventListener('mousedown', (e: MouseEvent) => {
+      if (this._orientationStatus === 'sensor') return;
+      mouseDown = true;
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+    el.addEventListener('mousemove', (e: MouseEvent) => {
+      if (!mouseDown || this._orientationStatus === 'sensor') return;
+      const dx = e.clientX - mouseX;
+      const dy = e.clientY - mouseY;
+      this.touchYaw -= dx * TOUCH_SENSITIVITY;
+      this.touchPitch -= dy * TOUCH_SENSITIVITY;
+      this.touchPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.touchPitch));
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+    el.addEventListener('mouseup', () => { mouseDown = false; });
+    el.addEventListener('mouseleave', () => { mouseDown = false; });
+  }
+
+  private applyTouchRotation(): void {
+    const euler = new THREE.Euler(this.touchPitch, this.touchYaw, 0, 'YXZ');
+    this.camera.quaternion.setFromEuler(euler);
+  }
+
+  // --- Video element setup ---
 
   private setupVideoElement(preferredId?: string): HTMLVideoElement | null {
     if (typeof document === 'undefined') return null;
@@ -190,13 +356,22 @@ export class LocationScene {
     return element;
   }
 
+  // --- Animation loop ---
+
   private animate = () => {
     this.animationFrameId = window.requestAnimationFrame(this.animate);
-    if (this.deviceControls?.update) {
+    if (this._orientationStatus === 'sensor' && this.deviceControls?.update) {
+      this.deviceControls.update();
+    } else if (this._orientationStatus === 'touch') {
+      this.applyTouchRotation();
+    } else if (this._orientationStatus === 'pending' && this.deviceControls?.update) {
+      // While pending, try LocAR controls (they're no-op if no sensor data)
       this.deviceControls.update();
     }
     this.renderer.render(this.scene, this.camera);
   };
+
+  // --- Object placement ---
 
   private tryPlaceObject(placement: PendingPlacement): boolean {
     if (!this.locationBased) return false;
@@ -238,9 +413,84 @@ export class LocationScene {
     }
   }
 
+  // --- Public API ---
+
+  private smoothGps(sample: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    altitude: number | null;
+  }): {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    altitude: number | null;
+  } {
+    this.gpsSamples.push(sample);
+    if (this.gpsSamples.length > GPS_SMOOTHING_WINDOW) {
+      this.gpsSamples.shift();
+    }
+
+    const len = this.gpsSamples.length;
+    if (!len) return sample;
+
+    let lat = 0;
+    let lon = 0;
+    let acc = 0;
+    let alt = 0;
+    let altCount = 0;
+    for (const s of this.gpsSamples) {
+      lat += s.latitude;
+      lon += s.longitude;
+      acc += s.accuracy;
+      if (typeof s.altitude === 'number') {
+        alt += s.altitude;
+        altCount += 1;
+      }
+    }
+
+    return {
+      latitude: lat / len,
+      longitude: lon / len,
+      accuracy: acc / len,
+      altitude: altCount > 0 ? alt / altCount : null,
+    };
+  }
+
   fakeGps(lon: number, lat: number, altitude?: number, accuracy?: number): void {
     this.locationBased?.fakeGps(lon, lat, altitude ?? null, accuracy ?? 0);
   }
+
+  onGpsUpdate(callback: (pos: { latitude: number; longitude: number; accuracy: number; altitude: number | null }) => void): void {
+    this.gpsCallbacks.push(callback);
+  }
+
+  get isOriginReady(): boolean {
+    return this.originReady;
+  }
+
+  get orientationStatus(): OrientationStatus {
+    return this._orientationStatus;
+  }
+
+  onOrientationStatus(callback: (status: OrientationStatus) => void): void {
+    this.orientationStatusCallbacks.push(callback);
+    if (this._orientationStatus !== 'pending') {
+      try { callback(this._orientationStatus); } catch (_e) { /* ignore */ }
+    }
+  }
+
+  reconnectOrientation(): void {
+    if (!this.deviceControls) return;
+    try {
+      this.deviceControls.disconnect();
+    } catch (_e) { /* ignore */ }
+    this.deviceControls.connect();
+    this.restartOrientationDetection();
+    console.log('[LocationScene] DeviceOrientationControls reconnected + watchdog restarted');
+  }
+
+  // --- Resize / Dispose ---
 
   private onResize(): void {
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -252,6 +502,10 @@ export class LocationScene {
     if (this.isDisposed) return;
     this.isDisposed = true;
     cancelAnimationFrame(this.animationFrameId);
+    if (this.watchdogTimer) {
+      clearTimeout(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
     window.removeEventListener('resize', this.handleResize);
     window.removeEventListener('beforeunload', this.handleBeforeUnload);
 
@@ -275,6 +529,7 @@ export class LocationScene {
     }
 
     this.pendingAdds = [];
+    this.gpsSamples = [];
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {
       this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);

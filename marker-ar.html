@@ -1,178 +1,242 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="AR.js を使った Hiro マーカー + GLB 3モデル デモ">
-    <title>Hiro マーカー AR (Duck / Suimon / Wankosoba)</title>
-    <link rel="stylesheet" href="styles.css">
-    
-    <!-- AR.jsとA-Frame（バージョン固定） -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Hiroマーカーで水門モデルを表示するAR" />
+    <title>Hiro マーカー AR</title>
+    <link rel="stylesheet" href="styles.css" />
     <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
     <script src="https://rawcdn.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
-    <!-- js-yaml（models.yaml を扱う場合に使用） -->
-    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
-</head>
-<body style="margin: 0; overflow: hidden;">
-    
-    <!-- 戻るボタン -->
-    <button class="back-button" onclick="goBack()">← ホーム</button>
-    
-    <!-- スタートオーバーレイ（モバイルのカメラ起動安定化のため） -->
-    <div id="start-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center;padding:20px;">
-        <h2 style="margin-bottom:12px;">カメラの起動準備</h2>
-        <p style="opacity:0.9;margin-bottom:20px;">「開始」をタップしてカメラを起動してください。</p>
-        <button id="start-btn" style="background:#667eea;border:none;color:#fff;padding:12px 24px;border-radius:9999px;font-weight:bold;cursor:pointer;">開始</button>
-        <p style="font-size:12px;opacity:0.8;margin-top:14px;">カメラアクセスの許可ダイアログが表示される場合があります。</p>
-    </div>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #04070d;
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
 
-    <!-- 情報オーバーレイ -->
-    <div class="info-overlay">
-        <p>カメラで Hiro マーカーをスキャンしてください</p>
-    </div>
+      .marker-panel {
+        position: fixed;
+        top: 18px;
+        right: 18px;
+        z-index: 1600;
+        width: min(230px, 52vw);
+        padding: 12px;
+        border-radius: 12px;
+        background: rgba(8, 12, 22, 0.82);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(7px);
+      }
 
-    <!-- モデル切り替え UI -->
-    <div id="model-switcher" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1500;display:flex;gap:8px;background:rgba(0,0,0,0.6);padding:8px 14px;border-radius:999px;font-size:13px;">
-        <button data-model="duck"  style="border:none;border-radius:999px;padding:6px 10px;background:#ffffff;color:#333;cursor:pointer;font-weight:bold;">Duck</button>
-        <button data-model="suimon" style="border:none;border-radius:999px;padding:6px 10px;background:#2ecc71;color:#fff;cursor:pointer;font-weight:bold;">Suimon</button>
-        <button data-model="wanko" style="border:none;border-radius:999px;padding:6px 10px;background:#e67e22;color:#fff;cursor:pointer;font-weight:bold;">Wankosoba</button>
-    </div>
+      .marker-panel.hidden {
+        display: none;
+      }
 
-    <!-- A-Frame ARシーン（モバイルでは背面カメラを優先） -->
-    <a-scene
-        embedded
-        arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
-        vr-mode-ui="enabled: false"
-        renderer="logarithmicDepthBuffer: true; precision: medium;"
+      .marker-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .marker-panel-title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .panel-btn,
+      .panel-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .marker-panel img {
+        width: 100%;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .marker-panel-note {
+        margin: 8px 0 0;
+        font-size: 11px;
+        line-height: 1.4;
+        opacity: 0.9;
+      }
+
+      .zoom-controls {
+        position: fixed;
+        right: 18px;
+        bottom: 84px;
+        z-index: 1600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        border-radius: 999px;
+        background: rgba(8, 12, 22, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+      }
+
+      .zoom-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        border: none;
+        background: #3ea7ff;
+        color: #031018;
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .zoom-label {
+        min-width: 56px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .panel-restore {
+        position: fixed;
+        top: 18px;
+        right: 18px;
+        z-index: 1601;
+        display: none;
+      }
+
+      .panel-restore.visible {
+        display: inline-flex;
+      }
+
+      .info-overlay {
+        z-index: 1500;
+        bottom: 18px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <button class="back-button" onclick="window.location.href='index.html'">← ホーム</button>
+
+    <div
+      id="start-overlay"
+      style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center;padding:20px;"
     >
-        <!-- アセット管理（必要に応じて将来利用） -->
-        <a-assets></a-assets>
+      <h2 style="margin-bottom:12px;">カメラを開始</h2>
+      <p style="opacity:0.9;margin-bottom:20px;">「開始」でマーカー検出を始めます。</p>
+      <button
+        id="start-btn"
+        style="background:#3ea7ff;border:none;color:#041120;padding:12px 24px;border-radius:9999px;font-weight:bold;cursor:pointer;"
+      >
+        開始
+      </button>
+    </div>
 
-        <!-- マーカー: Hiro -->
-        <a-marker preset="hiro">
-            <!-- 3Dモデル: Duck（手のひらサイズ想定） -->
-            <a-entity
-                id="model-duck"
-                data-model-entity="duck"
-                scale="0.4 0.4 0.4"
-                position="0 0.2 0"
-                visible="true"
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear"
-            ></a-entity>
+    <div class="info-overlay" id="marker-info">Hiroマーカーを映してください</div>
 
-            <!-- 3Dモデル: Suimon（元モデルが非常に大きいため 1/1000 前後まで縮小） -->
-            <a-entity
-                id="model-suimon"
-                data-model-entity="suimon"
-                scale="0.002 0.002 0.002"
-                position="0 0.2 0"
-                rotation="0 30 0"
-                visible="false"
-                animation="property: rotation; to: 0 -360 0; loop: true; dur: 11000; easing: linear"
-            ></a-entity>
+    <div id="marker-panel" class="marker-panel">
+      <div class="marker-row">
+        <p class="marker-panel-title">Hiroマーカー</p>
+        <button id="marker-panel-toggle" class="panel-btn" type="button">しまう</button>
+      </div>
+      <img src="assets/markers/hiro.png" alt="Hiro marker" />
+      <p class="marker-panel-note">別端末表示または印刷で使えます。</p>
+      <div class="marker-row" style="margin-top:8px; margin-bottom:0;">
+        <a class="panel-link" href="marker-print.html">印刷ページへ</a>
+      </div>
+    </div>
 
-            <!-- 3Dモデル: Wankosoba（手のひらサイズ想定） -->
-            <a-entity
-                id="model-wanko"
-                data-model-entity="wanko"
-                scale="0.4 0.4 0.4"
-                position="0 0.2 0"
-                visible="false"
-                animation="property: position; to: 0 0.6 0; dir: alternate; loop: true; dur: 1600; easing: easeInOutQuad"
-            ></a-entity>
+    <button id="marker-panel-restore" class="panel-btn panel-restore" type="button">マーカー表示</button>
 
-        </a-marker>
+    <div class="zoom-controls">
+      <button id="zoom-out" class="zoom-btn" type="button" aria-label="縮小">-</button>
+      <span id="zoom-value" class="zoom-label">100%</span>
+      <button id="zoom-in" class="zoom-btn" type="button" aria-label="拡大">+</button>
+    </div>
 
-        <!-- カメラ -->
-        <a-entity camera></a-entity>
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+      vr-mode-ui="enabled: false"
+      renderer="logarithmicDepthBuffer: true; precision: medium;"
+    >
+      <a-assets></a-assets>
+      <a-marker preset="hiro" id="hiro-marker">
+        <a-entity
+          id="model-suimon"
+          data-model-entity="suimon"
+          scale="0.004 0.004 0.004"
+          position="0 0.2 0"
+          rotation="0 30 0"
+          visible="true"
+          animation="property: rotation; to: 0 -360 0; loop: true; dur: 11000; easing: linear"
+        ></a-entity>
+      </a-marker>
+      <a-entity camera></a-entity>
     </a-scene>
 
     <script type="module" src="/src/marker-ar/main.ts"></script>
     <script>
-        function goBack() {
-            window.location.href = 'index.html';
-        }
+      (function setupStartOverlay() {
+        const overlay = document.getElementById('start-overlay');
+        const btn = document.getElementById('start-btn');
+        if (!overlay || !btn) return;
 
-        // 「開始」ボタンでユーザー操作をトリガーし、モバイルでのカメラ起動互換性を高める
-        (function setupStartOverlay(){
-            const overlay = document.getElementById('start-overlay');
-            const btn = document.getElementById('start-btn');
-            if (!overlay || !btn) return;
-            const start = () => {
-                overlay.style.display = 'none';
-                // iOS/Safari 向けにユーザー操作直後にオーディオ/ビデオ系のロックを外す
-                const sceneEl = document.querySelector('a-scene');
-                if (sceneEl && sceneEl.components && sceneEl.components['arjs']) {
-                    try {
-                        // AR.js が内部で getUserMedia を再試行できるように small hack
-                        sceneEl.emit('arjs-start');
-                    } catch (e) {
-                        console.warn('AR.js start emit failed', e);
-                    }
-                }
-            };
-            btn.addEventListener('click', start, { once: true });
-        })();
+        btn.addEventListener(
+          'click',
+          () => {
+            overlay.style.display = 'none';
+            const sceneEl = document.querySelector('a-scene');
+            if (sceneEl && sceneEl.components && sceneEl.components['arjs']) {
+              try {
+                sceneEl.emit('arjs-start');
+              } catch (e) {
+                console.warn('AR.js start emit failed', e);
+              }
+            }
+          },
+          { once: true }
+        );
+      })();
 
-        // マーカーが見つかった/見失った時にログを出力
+      if (typeof AFRAME !== 'undefined') {
         AFRAME.registerComponent('marker-listener', {
-            init: function() {
-                this.el.addEventListener('markerFound', function() {
-                    console.log('マーカーが見つかりました！');
-                    const overlay = document.querySelector('.info-overlay');
-                    if (overlay) {
-                        overlay.innerHTML = '<p>✓ マーカーを検出しました！ARコンテンツが表示されています</p>';
-                    }
-                });
-
-                this.el.addEventListener('markerLost', function() {
-                    console.log('マーカーが見失われました！');
-                    const overlay = document.querySelector('.info-overlay');
-                    if (overlay) {
-                        overlay.innerHTML = '<p>カメラでHiroマーカーをスキャンしてください</p>';
-                    }
-                });
-            }
-        });
-
-        // シーンが読み込まれた後にマーカーにリスナー・モデル切替を追加
-        window.addEventListener('load', function() {
-            const marker = document.querySelector('a-marker');
-            if (marker) {
-                marker.setAttribute('marker-listener', '');
-            }
-
-            const duck  = document.getElementById('model-duck');
-            const suimon = document.getElementById('model-suimon');
-            const wanko = document.getElementById('model-wanko');
-            const buttons = document.querySelectorAll('#model-switcher button');
-
-            function setActive(model) {
-                if (!duck || !suimon || !wanko) return;
-                duck.setAttribute('visible', model === 'duck');
-                suimon.setAttribute('visible', model === 'suimon');
-                wanko.setAttribute('visible', model === 'wanko');
-                buttons.forEach((btn) => {
-                    const b = btn;
-                    const isActive = b.getAttribute('data-model') === model;
-                    b.style.opacity = isActive ? '1' : '0.6';
-                    b.style.outline = isActive ? '2px solid rgba(255,255,255,0.9)' : 'none';
-                });
-            }
-
-            setActive('duck');
-
-            buttons.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    const model = btn.getAttribute('data-model');
-                    if (model === 'duck' || model === 'suimon' || model === 'wanko') {
-                        setActive(model);
-                    }
-                });
+          init: function () {
+            this.el.addEventListener('markerFound', function () {
+              const overlay = document.getElementById('marker-info');
+              if (overlay) overlay.textContent = '検出中';
             });
-        });
 
-        console.log('マーカーベースARが初期化されました');
+            this.el.addEventListener('markerLost', function () {
+              const overlay = document.getElementById('marker-info');
+              if (overlay) overlay.textContent = 'Hiroマーカーを映してください';
+            });
+          },
+        });
+      }
+
+      window.addEventListener('load', function () {
+        const marker = document.getElementById('hiro-marker');
+        if (marker) marker.setAttribute('marker-listener', '');
+      });
     </script>
-</body>
+  </body>
 </html>
