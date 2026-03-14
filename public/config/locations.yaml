@@ -183,3 +183,33 @@ locations:
     model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
+
+  - id: kitakami-3
+    name: "北上 #3"
+    latitude: 39.297783367229144
+    longitude: 141.12457395172927
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: 10
+    defaultSize: 7.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🌊"
+    color: "#4e9bff"
+
+  - id: kitakami-4
+    name: "北上 #4"
+    latitude: 39.29815067639761
+    longitude: 141.12330823481548
+    baseAltitudeMeters: 0
+    realHeightMeters: 8.5
+    defaultHeight: 10
+    defaultSize: 7.0
+    defaultRotationY: -2
+    offsetEast: 0
+    offsetNorth: 0
+    model: "suimon-kousin.glb"
+    icon: "🌊"
+    color: "#4e9bff"

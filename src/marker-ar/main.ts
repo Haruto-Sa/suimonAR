@@ -2,15 +2,26 @@ import { MODEL_URLS } from '../models';
 
 const BUILD_BASE = (import.meta as any).env?.BASE_URL ?? '/';
 
-const INITIAL_SCALE = 0.004;
+const INITIAL_SCALE = 0.01;
 const MIN_SCALE = 0.001;
-const MAX_SCALE = 0.02;
+const MAX_SCALE = 0.03;
 const SCALE_STEP_UP = 1.1;
 const SCALE_STEP_DOWN = 0.9;
+const DRAG_ROTATION_SENSITIVITY = 0.35;
+const DRAG_TILT_SENSITIVITY = 0.25;
+const MIN_ROTATION_X = -45;
+const MAX_ROTATION_X = 45;
 
 let currentScale = INITIAL_SCALE;
 let pinchStartDistance = 0;
 let pinchStartScale = INITIAL_SCALE;
+let currentRotationX = 0;
+let currentRotationY = 0;
+let dragActive = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let dragStartRotationX = 0;
+let dragStartRotationY = 0;
 
 function normalizeAssetUrl(url: string): string {
   const base = BUILD_BASE.endsWith('/') ? BUILD_BASE : `${BUILD_BASE}/`;
@@ -30,9 +41,13 @@ function clampScale(value: number): number {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
 }
 
+function getModel(): HTMLElement | null {
+  return document.getElementById('model-suimon') as HTMLElement | null;
+}
+
 function applyScale(value: number): void {
   currentScale = clampScale(value);
-  const model = document.getElementById('model-suimon') as HTMLElement | null;
+  const model = getModel();
   if (model) {
     const raw = currentScale.toFixed(4);
     model.setAttribute('scale', `${raw} ${raw} ${raw}`);
@@ -45,6 +60,18 @@ function applyScale(value: number): void {
   }
 }
 
+function clampRotationX(value: number): number {
+  return Math.min(MAX_ROTATION_X, Math.max(MIN_ROTATION_X, value));
+}
+
+function applyRotation(x: number, y: number): void {
+  currentRotationX = clampRotationX(x);
+  currentRotationY = y;
+  const model = getModel();
+  if (!model) return;
+  model.setAttribute('rotation', `${currentRotationX.toFixed(1)} ${currentRotationY.toFixed(1)} 0`);
+}
+
 function setSuimonModelSrc(): void {
   const suimonUrl = normalizeAssetUrl(MODEL_URLS.suimon);
 
@@ -55,6 +82,7 @@ function setSuimonModelSrc(): void {
   });
 
   applyScale(INITIAL_SCALE);
+  applyRotation(0, 0);
   console.log('[marker-ar] suimon model src set', { url: suimonUrl, count: nodes.length });
 }
 
@@ -100,6 +128,7 @@ function setupPinchZoom(): void {
     'touchstart',
     (event) => {
       if (event.touches.length !== 2) return;
+      dragActive = false;
       pinchStartDistance = getTouchDistance(event.touches[0], event.touches[1]);
       pinchStartScale = currentScale;
     },
@@ -130,7 +159,91 @@ function setupPinchZoom(): void {
   );
 }
 
+function isGestureTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return true;
+  return !target.closest('#start-overlay, .marker-panel, .panel-restore, .zoom-controls, .back-button');
+}
+
+function setupDragRotate(): void {
+  window.addEventListener(
+    'touchstart',
+    (event) => {
+      if (event.touches.length !== 1 || !isGestureTarget(event.target)) return;
+      dragActive = true;
+      dragStartX = event.touches[0].clientX;
+      dragStartY = event.touches[0].clientY;
+      dragStartRotationX = currentRotationX;
+      dragStartRotationY = currentRotationY;
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'touchmove',
+    (event) => {
+      if (!dragActive || event.touches.length !== 1 || pinchStartDistance > 0) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - dragStartX;
+      const dy = touch.clientY - dragStartY;
+      applyRotation(
+        dragStartRotationX - dy * DRAG_TILT_SENSITIVITY,
+        dragStartRotationY + dx * DRAG_ROTATION_SENSITIVITY
+      );
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+
+  window.addEventListener(
+    'touchend',
+    (event) => {
+      if (event.touches.length === 0) {
+        dragActive = false;
+      }
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'touchcancel',
+    () => {
+      dragActive = false;
+      pinchStartDistance = 0;
+    },
+    { passive: true }
+  );
+
+  let mouseDragging = false;
+  window.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || !isGestureTarget(event.target)) return;
+    mouseDragging = true;
+    dragStartX = event.clientX;
+    dragStartY = event.clientY;
+    dragStartRotationX = currentRotationX;
+    dragStartRotationY = currentRotationY;
+  });
+
+  window.addEventListener('mousemove', (event) => {
+    if (!mouseDragging) return;
+    const dx = event.clientX - dragStartX;
+    const dy = event.clientY - dragStartY;
+    applyRotation(
+      dragStartRotationX - dy * DRAG_TILT_SENSITIVITY,
+      dragStartRotationY + dx * DRAG_ROTATION_SENSITIVITY
+    );
+  });
+
+  window.addEventListener('mouseup', () => {
+    mouseDragging = false;
+  });
+
+  window.addEventListener('mouseleave', () => {
+    mouseDragging = false;
+  });
+}
+
 setSuimonModelSrc();
 setupPanelToggle();
 setupZoomButtons();
 setupPinchZoom();
+setupDragRotate();

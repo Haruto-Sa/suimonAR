@@ -5,6 +5,7 @@
 位置情報ベース AR（LocAR.js + three.js）、HiroマーカーAR、Matterport 埋め込み表示をまとめたプロジェクトです。
 
 - **ロケーション AR（確認用）**: `location-ar-check.html` で `public/config/locations.yaml` を読み込み、調整値のYAMLコピーが可能  
+- **ロケーション AR（デモ用）**: `location-ar-demo.html` で `public/config/locations.yaml` を読み込み、地点選択だけで表示を切り替え  
 - **ロケーション AR（本番用）**: `location-ar-prod.html` で `public/config/locations-heiRiver.yaml` を読み込み、最小UIで表示  
 - **マーカー AR**: `marker-ar.html` で Hiro マーカーに `suimon-kousin.glb` のみを表示  
 - **マーカー印刷ページ**: `marker-print.html` で A4 印刷用の Hiro マーカーを表示  
@@ -19,6 +20,7 @@
 ARjs/
 ├── index.html               # トップページ（3 モード選択 + OpenStreetMap 地点マップ）
 ├── location-ar-check.html   # ロケーションAR（確認用）
+├── location-ar-demo.html    # ロケーションAR（デモ用）
 ├── location-ar-prod.html    # ロケーションAR（本番用）
 ├── location-ar.html         # 旧URL互換（checkへリダイレクト）
 ├── heiRiver-ar.html         # 旧URL互換（prodへリダイレクト）
@@ -97,9 +99,10 @@ npm run build
 
 ## 機能別の使い方
 
-### 1. ロケーション AR（確認用 `location-ar-check.html` / 本番用 `location-ar-prod.html`）
+### 1. ロケーション AR（確認用 `location-ar-check.html` / デモ用 `location-ar-demo.html` / 本番用 `location-ar-prod.html`）
 
 - 確認用: `public/config/locations.yaml` を読み込み、右上の調整UIと「設定コピー」を使って配置値を詰めます
+- デモ用: `public/config/locations.yaml` を読み込み、地点選択だけを切り替えて表示します。サイズ / 向き / 東西南北オフセットは YAML の値で固定です
 - 本番用: `public/config/locations-heiRiver.yaml` を読み込み、最小UIで表示します（デバッグ調整UIなし）
 - 確認用でコピーしたYAML断片は、`locations-heiRiver.yaml` の `locations:` 配下へそのまま貼り付け可能です
 
@@ -108,13 +111,15 @@ npm run build
 - `GPSモード`: LocAR.js で緯度経度に固定表示。GPS/コンパス誤差の影響を受ける
 - `高精度ARモード (WebXR)`: 開始時の現在地と対象地点から ENU 差分を算出し、以後は WebXR のトラッキングで近距離移動（前後/上下）を反映
 - WebXR 非対応端末は GPSモードを継続
+- 高精度AR開始ボタンは確認用ページのみ表示
 
 **右上パネル（地点 / モデル調整）**
 
 - **確認用はSuimon固定**: モデル切り替えなし
 - **地点選択**: `locations.yaml` の地点を切り替え
-- **表示モード**: 現在モード表示と「高精度AR開始 (WebXR)」ボタン
-- **モデル高さ / サイズ / 向き / 東西・南北オフセット**: スライダー・数値入力で調整（常時編集可）
+- **デモ用は地点選択のみ**: 位置補正、回転、サイズ変更は不可
+- **表示モード**: 現在モード表示。確認用では「高精度AR開始 (WebXR)」ボタンも表示
+- **モデル高さ / サイズ / 向き / 東西・南北オフセット**: 確認用のみスライダー・数値入力で調整可能
 
 **右下パネル（位置情報表示）**
 

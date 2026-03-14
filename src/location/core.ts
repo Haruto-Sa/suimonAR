@@ -18,13 +18,27 @@ const DEFAULT_VIDEO_ELEMENT_ID = 'locar-video-feed';
 const ORIENTATION_WATCHDOG_MS = 5000;
 const TOUCH_SENSITIVITY = 0.004;
 const PITCH_LIMIT = Math.PI * 0.45;
-const GPS_SMOOTHING_WINDOW = 5;
+const GPS_SMOOTHING_WINDOW = 8;
+const GPS_INITIAL_SAMPLE_COUNT = 3;
+const GPS_ACCEPT_ACCURACY_MULTIPLIER = 1.5;
+const GPS_POSITION_DEADBAND_METERS = 1.5;
+const GPS_ACCURACY_IMPROVEMENT_METERS = 8;
+const GPS_DYNAMIC_DEADBAND_ACCURACY_FACTOR = 0.5;
+const GPS_DYNAMIC_DEADBAND_MAX_METERS = 12;
+const ELEVATION_UPDATE_THRESHOLD_METERS = 4;
 
 type PendingPlacement = {
   object: THREE.Object3D;
   lat: number;
   lon: number;
   altitude: number;
+};
+
+type GpsSample = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  altitude: number | null;
 };
 
 export type LocationSceneOptions = {
@@ -50,8 +64,13 @@ export class LocationScene {
   private isDisposed = false;
   private readonly handleResize = () => this.onResize();
   private readonly handleBeforeUnload = () => this.dispose();
+  private readonly gpsMinDistance: number;
+  private readonly gpsMinAccuracy: number;
+  private geolocationWatchId: number | null = null;
   private gpsCallbacks: Array<(pos: { latitude: number; longitude: number; accuracy: number; altitude: number | null }) => void> = [];
-  private gpsSamples: Array<{ latitude: number; longitude: number; accuracy: number; altitude: number | null }> = [];
+  private gpsSamples: GpsSample[] = [];
+  private lastInjectedGps: GpsSample | null = null;
+  private smoothedElevation: number | null = null;
 
   private _orientationStatus: OrientationStatus = 'pending';
   private orientationEventReceived = false;
@@ -67,6 +86,9 @@ export class LocationScene {
   private touchPrevY = 0;
 
   constructor(options: LocationSceneOptions = {}) {
+    this.gpsMinDistance = options.gpsMinDistance ?? 3;
+    this.gpsMinAccuracy = options.gpsMinAccuracy ?? 60;
+
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(
       60,
@@ -124,68 +146,10 @@ export class LocationScene {
     }
 
     this.locationBased = new LocAR.LocationBased(this.scene, this.camera, {
-      gpsMinDistance: options.gpsMinDistance ?? 3,
-      gpsMinAccuracy: options.gpsMinAccuracy ?? 60,
+      gpsMinDistance: this.gpsMinDistance,
+      gpsMinAccuracy: this.gpsMinAccuracy,
     });
-
-    if (this.locationBased.on) {
-      this.locationBased.on('gpsupdate', (payload: any) => {
-        const gpsEvent =
-          payload && typeof payload === 'object' && 'position' in payload
-            ? payload
-            : null;
-        const position = gpsEvent?.position ?? payload;
-        if (!this.originReady) {
-          this.originReady = true;
-          console.log('[LocationScene] GPS origin established');
-        }
-        this.flushPendingAdds();
-
-        try {
-          const coords = position?.coords ?? position;
-          if (coords && typeof coords.latitude === 'number') {
-            const raw = {
-              latitude: coords.latitude as number,
-              longitude: coords.longitude as number,
-              accuracy: (coords.accuracy as number) ?? 0,
-              altitude:
-                typeof coords.altitude === 'number' && Number.isFinite(coords.altitude)
-                  ? (coords.altitude as number)
-                  : null,
-            };
-            if (raw.altitude !== null) {
-              this.locationBased?.setElevation(raw.altitude);
-            }
-            const data = this.smoothGps(raw);
-            for (const cb of this.gpsCallbacks) {
-              cb(data);
-            }
-          }
-        } catch (e) {
-          console.warn('[LocationScene] GPS callback dispatch error', e);
-        }
-      });
-      this.locationBased.on('gpserror', (error: GeolocationPositionError) => {
-        console.warn('[LocationScene] GPS 取得中にエラーが発生しました', error);
-      });
-    }
-
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      try {
-        const startResult = this.locationBased.startGps();
-        if (startResult && typeof (startResult as Promise<boolean>).then === 'function') {
-          (startResult as Promise<boolean>).catch((error) => {
-            console.warn('[LocationScene] GPS の開始に失敗しました', error);
-          });
-        } else if (startResult === false) {
-          console.warn('[LocationScene] GPS を開始できませんでした (戻り値 false)');
-        }
-      } catch (error) {
-        console.warn('[LocationScene] startGps 呼び出しに失敗しました', error);
-      }
-    } else {
-      console.warn('[LocationScene] Geolocation API が利用できません');
-    }
+    this.startGeolocationWatch();
 
     this.deviceControls = new LocAR.DeviceOrientationControls(this.camera, {
       enablePermissionDialog: false,
@@ -244,6 +208,112 @@ export class LocationScene {
       this.watchdogTimer = null;
     }
     this.setupOrientationWatchdog();
+  }
+
+  // --- GPS filtering ---
+
+  private startGeolocationWatch(): void {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      console.warn('[LocationScene] Geolocation API が利用できません');
+      return;
+    }
+
+    try {
+      this.geolocationWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+          this.handleGpsPosition(position);
+        },
+        (error) => {
+          console.warn('[LocationScene] GPS 取得中にエラーが発生しました', error);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 10000,
+        }
+      );
+    } catch (error) {
+      console.warn('[LocationScene] GPS watchPosition の開始に失敗しました', error);
+    }
+  }
+
+  private handleGpsPosition(position: GeolocationPosition): void {
+    try {
+      const coords = position.coords;
+      const raw: GpsSample = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: typeof coords.accuracy === 'number' && Number.isFinite(coords.accuracy) ? coords.accuracy : 0,
+        altitude:
+          typeof coords.altitude === 'number' && Number.isFinite(coords.altitude) ? coords.altitude : null,
+      };
+      const data = this.smoothGps(raw);
+      if (!this.shouldInjectGps(raw, data)) return;
+      this.injectGps(data);
+    } catch (error) {
+      console.warn('[LocationScene] GPS callback dispatch error', error);
+    }
+  }
+
+  private shouldInjectGps(raw: GpsSample, smoothed: GpsSample): boolean {
+    const allowedAccuracy = this.lastInjectedGps ? this.gpsMinAccuracy : this.gpsMinAccuracy * GPS_ACCEPT_ACCURACY_MULTIPLIER;
+    if (raw.accuracy > allowedAccuracy) {
+      return false;
+    }
+
+    if (!this.lastInjectedGps) {
+      return this.gpsSamples.length >= GPS_INITIAL_SAMPLE_COUNT;
+    }
+
+    const moved = this.distanceMeters(this.lastInjectedGps, smoothed);
+    if (moved >= this.movementThresholdMeters(raw, smoothed)) {
+      return true;
+    }
+
+    return smoothed.accuracy + GPS_ACCURACY_IMPROVEMENT_METERS < this.lastInjectedGps.accuracy;
+  }
+
+  private injectGps(data: GpsSample): void {
+    this.locationBased?.fakeGps(data.longitude, data.latitude, undefined, data.accuracy);
+    this.lastInjectedGps = data;
+
+    if (!this.originReady) {
+      this.originReady = true;
+      console.log('[LocationScene] GPS origin established');
+    }
+
+    this.flushPendingAdds();
+    this.updateCameraElevation(data.altitude);
+
+    for (const cb of this.gpsCallbacks) {
+      cb(data);
+    }
+  }
+
+  private distanceMeters(a: Pick<GpsSample, 'latitude' | 'longitude'>, b: Pick<GpsSample, 'latitude' | 'longitude'>): number {
+    const r = 6378137;
+    const lat1 = (a.latitude * Math.PI) / 180;
+    const lat2 = (b.latitude * Math.PI) / 180;
+    const dLat = lat2 - lat1;
+    const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+    const h =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * r * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
+  private movementThresholdMeters(raw: GpsSample, smoothed: GpsSample): number {
+    const effectiveAccuracy = Math.max(
+      raw.accuracy || 0,
+      smoothed.accuracy || 0,
+      this.lastInjectedGps?.accuracy || 0
+    );
+    const accuracyScaledDeadband = Math.min(
+      GPS_DYNAMIC_DEADBAND_MAX_METERS,
+      effectiveAccuracy * GPS_DYNAMIC_DEADBAND_ACCURACY_FACTOR
+    );
+
+    return Math.max(this.gpsMinDistance, GPS_POSITION_DEADBAND_METERS, accuracyScaledDeadband);
   }
 
   // --- Touch drag fallback ---
@@ -415,17 +485,7 @@ export class LocationScene {
 
   // --- Public API ---
 
-  private smoothGps(sample: {
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-    altitude: number | null;
-  }): {
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-    altitude: number | null;
-  } {
+  private smoothGps(sample: GpsSample): GpsSample {
     this.gpsSamples.push(sample);
     if (this.gpsSamples.length > GPS_SMOOTHING_WINDOW) {
       this.gpsSamples.shift();
@@ -437,24 +497,49 @@ export class LocationScene {
     let lat = 0;
     let lon = 0;
     let acc = 0;
+    let accWeightSum = 0;
+    let weightSum = 0;
     let alt = 0;
+    let altWeightSum = 0;
     let altCount = 0;
-    for (const s of this.gpsSamples) {
-      lat += s.latitude;
-      lon += s.longitude;
-      acc += s.accuracy;
+    this.gpsSamples.forEach((s, index) => {
+      const recencyWeight = 1 + index / len;
+      const accuracyWeight = 1 / Math.max(s.accuracy, 1);
+      const weight = recencyWeight * accuracyWeight;
+
+      lat += s.latitude * weight;
+      lon += s.longitude * weight;
+      acc += s.accuracy * recencyWeight;
+      accWeightSum += recencyWeight;
+      weightSum += weight;
       if (typeof s.altitude === 'number') {
-        alt += s.altitude;
+        alt += s.altitude * weight;
+        altWeightSum += weight;
         altCount += 1;
       }
-    }
+    });
+
+    const normalizedWeight = weightSum || 1;
 
     return {
-      latitude: lat / len,
-      longitude: lon / len,
-      accuracy: acc / len,
-      altitude: altCount > 0 ? alt / altCount : null,
+      latitude: lat / normalizedWeight,
+      longitude: lon / normalizedWeight,
+      accuracy: acc / (accWeightSum || 1),
+      altitude: altCount > 0 ? alt / (altWeightSum || 1) : null,
     };
+  }
+
+  private updateCameraElevation(altitude: number | null): void {
+    if (typeof altitude !== 'number' || !Number.isFinite(altitude)) return;
+
+    // 高度ノイズでカメラが上下すると、固定モデルが追従して見えるため反映頻度を絞る。
+    if (
+      this.smoothedElevation === null ||
+      Math.abs(altitude - this.smoothedElevation) >= ELEVATION_UPDATE_THRESHOLD_METERS
+    ) {
+      this.locationBased?.setElevation(altitude);
+      this.smoothedElevation = altitude;
+    }
   }
 
   fakeGps(lon: number, lat: number, altitude?: number, accuracy?: number): void {
@@ -509,10 +594,13 @@ export class LocationScene {
     window.removeEventListener('resize', this.handleResize);
     window.removeEventListener('beforeunload', this.handleBeforeUnload);
 
-    try {
-      this.locationBased?.stopGps();
-    } catch (error) {
-      console.warn('[LocationScene] stopGps 実行中にエラー', error);
+    if (this.geolocationWatchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+      try {
+        navigator.geolocation.clearWatch(this.geolocationWatchId);
+      } catch (error) {
+        console.warn('[LocationScene] clearWatch 実行中にエラー', error);
+      }
+      this.geolocationWatchId = null;
     }
 
     try {
@@ -530,6 +618,8 @@ export class LocationScene {
 
     this.pendingAdds = [];
     this.gpsSamples = [];
+    this.lastInjectedGps = null;
+    this.smoothedElevation = null;
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {
       this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);

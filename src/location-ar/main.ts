@@ -65,6 +65,12 @@ type ModelTemplate = {
   bboxHeight: number;
 };
 
+type WorldPlacement = {
+  lat: number;
+  lon: number;
+  altitude: number;
+};
+
 const MODEL_KIND_TO_FILE: Record<ModelKind, string> = {
   duck: 'Duck.glb',
   suimon: 'suimon-kousin.glb',
@@ -337,6 +343,16 @@ function resolveTargetAltitude(cfg: SuimonModelConfig | null): number {
   if (cfg && typeof cfg.altitude === 'number') return cfg.altitude;
   if (cfg && typeof cfg.baseAltitudeMeters === 'number') return cfg.baseAltitudeMeters;
   return 0;
+}
+
+function buildWorldPlacement(target: Target): WorldPlacement {
+  const cfg = getSuimonConfigForTarget(target);
+  return {
+    // UI の補正値は固定地点の初期補正としてのみ扱い、通常フレームでは触らない。
+    lat: target.lat + metersToLatDelta(state.offsetNorth),
+    lon: target.lon + metersToLonDelta(state.offsetEast, target.lat),
+    altitude: resolveTargetAltitude(cfg),
+  };
 }
 
 function isRealScaleTarget(target: Target | null): boolean {
@@ -755,7 +771,8 @@ class GpsModeController {
     if (this.scene) return;
 
     this.scene = new LocationScene({
-      gpsMinDistance: PAGE_CONFIG.gpsMinDistance ?? 0.5,
+      // 細かな GPS ノイズでは原点を更新せず、位置が安定したサンプルだけを採用する。
+      gpsMinDistance: PAGE_CONFIG.gpsMinDistance ?? 1.5,
       gpsMinAccuracy: PAGE_CONFIG.gpsMinAccuracy ?? 60,
     });
 
@@ -909,15 +926,14 @@ class XrModeController {
     }
 
     const model = await createTargetObject(target, {
-      includeHeightInModelPosition: false,
+      includeHeightInModelPosition: true,
       yawOffsetDeg: -this.headingDeg,
     });
 
-    const cfg = getSuimonConfigForTarget(target);
-    const targetAltitude = resolveTargetAltitude(cfg);
+    const placement = buildWorldPlacement(target);
 
-    const dLat = target.lat + metersToLatDelta(state.offsetNorth) - this.startPosition.latitude;
-    const dLon = target.lon + metersToLonDelta(state.offsetEast, target.lat) - this.startPosition.longitude;
+    const dLat = placement.lat - this.startPosition.latitude;
+    const dLon = placement.lon - this.startPosition.longitude;
 
     const east = dLon * 111320 * Math.cos((this.startPosition.latitude * Math.PI) / 180);
     const north = dLat * 110540;
@@ -925,7 +941,7 @@ class XrModeController {
       typeof this.startPosition.altitude === 'number' && Number.isFinite(this.startPosition.altitude)
         ? this.startPosition.altitude
         : 0;
-    const up = targetAltitude - userAltitude + state.modelHeight;
+    const up = placement.altitude - userAltitude;
 
     const headingRad = (this.headingDeg * Math.PI) / 180;
     const localX = east * Math.cos(headingRad) - north * Math.sin(headingRad);
@@ -1007,22 +1023,18 @@ async function spawnFixedTarget() {
     const anchor = new THREE.Group();
     anchor.add(model);
 
-    const cfg = getSuimonConfigForTarget(target);
-    const altitude = resolveTargetAltitude(cfg);
-
-    const finalLat = target.lat + metersToLatDelta(state.offsetNorth);
-    const finalLon = target.lon + metersToLonDelta(state.offsetEast, target.lat);
+    const placement = buildWorldPlacement(target);
 
     state.fixedAnchor = anchor;
     state.fixedModel = model;
     state.fixedObject = anchor;
 
-    gpsController.addAtLatLon(anchor, finalLat, finalLon, altitude);
+    gpsController.addAtLatLon(anchor, placement.lat, placement.lon, placement.altitude);
     state.hasFixedSpawned = true;
 
     logEvent('spawn-fixed', '固定モデルを配置しました', {
       target: summarizeTarget(target),
-      altitude,
+      altitude: placement.altitude,
       offsetEast: state.offsetEast,
       offsetNorth: state.offsetNorth,
       mode: 'gps',

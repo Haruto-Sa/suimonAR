@@ -159,6 +159,7 @@
       </div>
       <img src="assets/markers/hiro.png" alt="Hiro marker" />
       <p class="marker-panel-note">別端末表示または印刷で使えます。</p>
+      <p class="marker-panel-note">1本指ドラッグで回転、2本指ピンチで拡大縮小できます。</p>
       <div class="marker-row" style="margin-top:8px; margin-bottom:0;">
         <a class="panel-link" href="marker-print.html">印刷ページへ</a>
       </div>
@@ -180,14 +181,14 @@
     >
       <a-assets></a-assets>
       <a-marker preset="hiro" id="hiro-marker">
+        <!-- マーカー基準で静止表示し、回転演出は入れない。 -->
         <a-entity
           id="model-suimon"
           data-model-entity="suimon"
-          scale="0.004 0.004 0.004"
+          scale="0.01 0.01 0.01"
           position="0 0.2 0"
-          rotation="0 30 0"
+          rotation="0 0 0"
           visible="true"
-          animation="property: rotation; to: 0 -360 0; loop: true; dur: 11000; easing: linear"
         ></a-entity>
       </a-marker>
       <a-entity camera></a-entity>

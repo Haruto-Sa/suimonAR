@@ -17,6 +17,7 @@ export default defineConfig({
         'marker-ar': 'marker-ar.html',
         'location-ar': 'location-ar.html',
         'location-ar-check': 'location-ar-check.html',
+        'location-ar-demo': 'location-ar-demo.html',
         'location-ar-prod': 'location-ar-prod.html',
         'heiRiver-ar': 'heiRiver-ar.html',
         'marker-print': 'marker-print.html',
