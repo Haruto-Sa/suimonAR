@@ -8,7 +8,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "locar": "^0.1.4",
     "three": "^0.175.0"
   },
   "devDependencies": {

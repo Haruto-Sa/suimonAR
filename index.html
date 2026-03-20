@@ -5,11 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>suimonAR</title>
     <link rel="stylesheet" href="styles.css" />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      crossorigin=""
-    />
     <style>
       body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0c1018; color: #f7f9fc; }
       .wrap { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
@@ -29,29 +24,14 @@
       .marker-section p { margin: 0 0 12px; font-size: 14px; opacity: 0.86; line-height: 1.6; }
       .marker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
       .marker-row img { width: 160px; max-width: 48vw; border-radius: 10px; border: 2px solid rgba(255,255,255,0.22); background: #fff; }
-      .map-section { margin-top: 32px; }
-      .map-section h2 { margin: 0 0 8px; font-size: 18px; }
-      .map-section p { margin: 0 0 12px; font-size: 14px; opacity: 0.8; }
-      #locations-map { width: 100%; height: 360px; border-radius: 12px; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.35); }
     </style>
   </head>
   <body>
     <div class="wrap">
       <h1>suimonAR</h1>
-      <p class="lead">ロケーションAR、マーカーAR、Matterportを利用できます。</p>
+      <p class="lead">閉伊川水門の 3D モデルを確認するためのページ群です。クリーンアップ中のため、現在はマーカーARと Matterport を維持しています。</p>
 
       <div class="grid">
-        <div class="card">
-          <div class="card-icon">📍</div>
-          <h2>ロケーションAR</h2>
-          <p>確認用で調整した内容を公開用へ反映でき、デモ用では地点選択だけで表示を切り替えられます。</p>
-          <div class="card-actions">
-            <a class="btn" href="location-ar-check.html">確認用</a>
-            <a class="btn-outline" href="location-ar-demo.html">デモ用</a>
-            <a class="btn-outline" href="location-ar-prod.html">公開用</a>
-          </div>
-        </div>
-
         <div class="card">
           <div class="card-icon">🔍</div>
           <h2>マーカーベースAR</h2>
@@ -82,64 +62,7 @@
         </div>
       </div>
 
-      <div class="map-section">
-        <h2>水門地点マップ</h2>
-        <p>OpenStreetMap 上に指定した地点をプロット。</p>
-        <div id="locations-map"></div>
-      </div>
-
-      <div class="note">カメラと位置情報の許可が必要です。</div>
+      <div class="note">次のフェーズでモデルビューアとロケーションARを新しい構成で追加します。</div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      crossorigin=""
-    ></script>
-    <script>
-      (async function initLocationsMap() {
-        var mapEl = document.getElementById('locations-map');
-        if (!mapEl || typeof L === 'undefined') return;
-
-        var map = L.map('locations-map', { zoomControl: true });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-
-        try {
-          var res = await fetch('config/locations.yaml', { cache: 'no-store' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          var text = await res.text();
-          var parsed = (typeof jsyaml !== 'undefined' && jsyaml.load)
-            ? jsyaml.load(text)
-            : null;
-          var raw = Array.isArray(parsed?.locations)
-            ? parsed.locations
-            : Array.isArray(parsed)
-            ? parsed
-            : [];
-
-          var latlngs = [];
-          raw.forEach(function(loc) {
-            var lat = Number(loc.latitude ?? loc.lat);
-            var lon = Number(loc.longitude ?? loc.lon);
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-            latlngs.push([lat, lon]);
-            var name = (loc.name || loc.id || '地点').toString();
-            var icon = (loc.icon || '📍').toString();
-            L.marker([lat, lon]).addTo(map).bindPopup(icon + ' ' + name);
-          });
-
-          if (latlngs.length) {
-            map.fitBounds(latlngs, { padding: [20, 20] });
-          } else {
-            map.setView([39.7021, 141.1544], 14);
-          }
-        } catch (e) {
-          console.warn('locations.yaml の読み込みに失敗しました', e);
-          map.setView([39.7021, 141.1544], 14);
-        }
-      })();
-    </script>
   </body>
 </html>
