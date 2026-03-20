@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>suimonAR Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #f6f7ff;
+        background:
+          radial-gradient(circle at top right, rgba(108, 92, 231, 0.24), transparent 24%),
+          radial-gradient(circle at bottom left, rgba(78, 155, 255, 0.22), transparent 28%),
+          linear-gradient(145deg, #0d1221, #1d2755 55%, #37205d);
+      }
+      .page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 18px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.14);
+        color: #fff;
+        text-decoration: none;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 20px;
+      }
+      .viewer-shell,
+      .panel {
+        border-radius: 24px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(14, 18, 38, 0.82);
+        backdrop-filter: blur(16px);
+        box-shadow: 0 24px 70px rgba(0,0,0,0.28);
+      }
+      .viewer-shell {
+        position: relative;
+        overflow: hidden;
+        min-height: 72vh;
+      }
+      .viewer-header {
+        position: absolute;
+        top: 18px;
+        left: 18px;
+        right: 18px;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        pointer-events: none;
+      }
+      .viewer-chip {
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(8, 11, 25, 0.78);
+        border: 1px solid rgba(255,255,255,0.12);
+        font-size: 13px;
+      }
+      model-viewer {
+        width: 100%;
+        height: 72vh;
+        background: transparent;
+      }
+      .hint {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 18px;
+        z-index: 2;
+        display: grid;
+        gap: 12px;
+        padding: 18px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, rgba(9, 13, 29, 0.84), rgba(16, 28, 60, 0.8));
+        border: 1px solid rgba(255,255,255,0.12);
+      }
+      .hint-copy {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        color: rgba(246,247,255,0.8);
+        line-height: 1.6;
+      }
+      .hint-icon {
+        font-size: 28px;
+      }
+      .tap-note {
+        font-size: 13px;
+        color: rgba(246,247,255,0.72);
+      }
+      .ar-button {
+        border: none;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font: inherit;
+        font-weight: 700;
+        color: #07131f;
+        background: linear-gradient(135deg, #7dd3fc, #c4b5fd);
+        cursor: pointer;
+      }
+      .panel {
+        padding: 20px;
+        display: grid;
+        gap: 16px;
+        align-content: start;
+      }
+      .panel h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .panel p {
+        margin: 0;
+        line-height: 1.7;
+        color: rgba(246,247,255,0.8);
+      }
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+      .field label,
+      .info-key {
+        font-size: 13px;
+        color: rgba(246,247,255,0.72);
+      }
+      .field select,
+      .field input {
+        width: 100%;
+      }
+      .field select {
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.16);
+        background: rgba(255,255,255,0.08);
+        color: #fff;
+      }
+      .progress-track {
+        height: 8px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.12);
+      }
+      .progress-fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #7dd3fc, #c4b5fd);
+        transition: width 0.2s ease;
+      }
+      .info {
+        display: grid;
+        gap: 10px;
+      }
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 13px;
+      }
+      .info-val {
+        text-align: right;
+      }
+      .toast {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 20;
+        max-width: min(360px, calc(100vw - 36px));
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: rgba(9, 13, 29, 0.92);
+        border: 1px solid rgba(255,255,255,0.14);
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        pointer-events: none;
+      }
+      .toast.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .note {
+        font-size: 12px;
+        color: rgba(246,247,255,0.68);
+      }
+      @media (max-width: 980px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .viewer-shell,
+        model-viewer {
+          min-height: 58vh;
+          height: 58vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <a class="back-link" href="index.html">← トップへ戻る</a>
+
+      <div class="layout">
+        <section class="viewer-shell">
+          <div class="viewer-header">
+            <div class="viewer-chip">ネイティブ AR Viewer</div>
+            <div id="viewer-status" class="viewer-chip">モデル準備中</div>
+          </div>
+
+          <model-viewer
+            id="model-viewer"
+            ar
+            ar-modes="webxr scene-viewer quick-look"
+            ar-scale="fixed"
+            camera-controls
+            auto-rotate
+            interaction-prompt="auto"
+            camera-orbit="45deg 65deg auto"
+            camera-target="0m 4m 0m"
+            field-of-view="45deg"
+            loading="eager"
+            shadow-intensity="1"
+          >
+            <button slot="ar-button" id="ar-button" class="ar-button">AR で見る</button>
+          </model-viewer>
+
+          <div class="hint">
+            <div class="hint-copy">
+              <div class="hint-icon">📱</div>
+              <div>スマートフォンではモデルをタップするだけで AR 起動を試みます。回転・ズーム確認はブラウザ内プレビューで行えます。</div>
+            </div>
+            <div class="tap-note">独自のカメラ確認ダイアログは出しません。必要な権限はブラウザ標準 UI に委譲します。</div>
+          </div>
+        </section>
+
+        <aside class="panel">
+          <h1>モデルビューア</h1>
+          <p>YAML の `models` セクションから読み込んだモデルを `<model-viewer>` で表示し、iOS Quick Look / Android Scene Viewer に橋渡しします。</p>
+
+          <div class="field">
+            <label for="model-select">モデル選択</label>
+            <select id="model-select"></select>
+          </div>
+
+          <div class="field">
+            <label for="rotation-slider">プレビュー回転 <span id="rotation-value">0°</span></label>
+            <input id="rotation-slider" type="range" min="-180" max="180" step="1" value="0" />
+          </div>
+
+          <div class="field">
+            <label for="scale-slider">プレビュー倍率 <span id="scale-value">1.00x</span></label>
+            <input id="scale-slider" type="range" min="0.25" max="3" step="0.05" value="1" />
+          </div>
+
+          <div class="field">
+            <label>読み込み進捗 <span id="progress-label">0%</span></label>
+            <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+          </div>
+
+          <div class="info">
+            <div class="info-row"><span class="info-key">モデル</span><span id="info-model" class="info-val">--</span></div>
+            <div class="info-row"><span class="info-key">GLB</span><span id="info-glb" class="info-val">--</span></div>
+            <div class="info-row"><span class="info-key">USDZ</span><span id="info-usdz" class="info-val">自動生成フォールバック</span></div>
+            <div class="info-row"><span class="info-key">AR起動</span><span id="info-ar" class="info-val">Quick Look / Scene Viewer</span></div>
+          </div>
+
+          <p class="note">USDZ ファイルが未設定のモデルは、iOS では model-viewer の自動生成フォールバックを使います。</p>
+        </aside>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script type="module" src="/src/viewer/main.ts"></script>
+  </body>
+</html>

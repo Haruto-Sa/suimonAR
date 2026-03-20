@@ -14,6 +14,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
+        viewer: 'viewer.html',
         'marker-ar': 'marker-ar.html',
         'marker-print': 'marker-print.html',
         matterport: 'matterport.html',
