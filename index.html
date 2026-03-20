@@ -29,25 +29,34 @@
   <body>
     <div class="wrap">
       <h1>suimonAR</h1>
-      <p class="lead">閉伊川水門の 3D モデルを確認するためのページ群です。クリーンアップ中のため、現在はマーカーARと Matterport を維持しています。</p>
+      <p class="lead">閉伊川水門の 3D モデルを、マーカーAR・モデルビューア・ロケーションARで確認できる Web アプリケーションです。</p>
 
       <div class="grid">
         <div class="card">
           <div class="card-icon">🔍</div>
-          <h2>マーカーベースAR</h2>
-          <p>Hiroマーカーで水門モデルを表示。拡大縮小操作に対応。</p>
+          <h2>マーカーベース AR</h2>
+          <p>Hiroマーカーで水門モデルを表示します。既存のマーカーARページをそのまま維持しています。</p>
           <div class="card-actions">
-            <a class="btn" href="marker-ar.html">マーカーAR</a>
+            <a class="btn" href="marker.html">マーカーAR</a>
             <a class="btn-outline" href="marker-print.html">印刷ページ</a>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-icon">🏠</div>
-          <h2>Matterport</h2>
-          <p>ページ内埋め込みで Matterport 空間を表示。</p>
+          <div class="card-icon">📦</div>
+          <h2>モデルビューア</h2>
+          <p>GLB / USDZ モデルを 3D プレビューし、iOS Quick Look / Android Scene Viewer に渡します。</p>
           <div class="card-actions">
-            <a class="btn" href="matterport.html">Matterport を開く</a>
+            <a class="btn" href="viewer.html">viewer を開く</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📍</div>
+          <h2>ロケーションベース AR</h2>
+          <p>GPS と WebXR / DeviceOrientation を使って、現実空間に固定したモデルを表示します。</p>
+          <div class="card-actions">
+            <a class="btn" href="location.html">location を開く</a>
           </div>
         </div>
       </div>
@@ -62,7 +71,7 @@
         </div>
       </div>
 
-      <div class="note">次のフェーズでモデルビューアとロケーションARを新しい構成で追加します。</div>
+      <div class="note">Matterport ページは互換のため残していますが、主要導線は marker / viewer / location の 3 モードに整理しました。</div>
     </div>
   </body>
 </html>
