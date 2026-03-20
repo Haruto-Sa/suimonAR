@@ -1,70 +1,97 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working in this repository.
 
 ## Commands
 
 ```bash
-npm run dev      # Start dev server at localhost:8000
-npm run build    # Production build → dist/
-npm run preview  # Preview production build locally
+npm install
+npm run dev
+npm run build
+npm run preview
 ```
 
-No test or lint commands are currently configured.
+No dedicated test or lint command is configured. Validation is currently `npx tsc --noEmit` and `npm run build`.
 
-## Architecture Overview
+## Project Overview
 
-**sumionAR** is a multi-mode AR demo (location-based AR, marker-based AR, Matterport embed) built with Vite + TypeScript. It has **no SPA framework** — it uses multiple independent HTML entry points, each compiled as a separate bundle.
+`suimonAR` is a multi-entry Vite + TypeScript project for showing the Hei River floodgate model in three modes:
 
-### Entry Points
+- marker AR via A-Frame + AR.js
+- 3D / native AR viewing via `@google/model-viewer`
+- location AR via WebXR with a DeviceOrientation fallback
 
-| HTML File | Purpose |
+There is no SPA framework. Each HTML file is an independent entry point.
+
+## Entry Points
+
+| HTML file | Purpose |
 |-----------|---------|
-| `index.html` | Landing page with Leaflet map of all locations |
-| `location-ar-check.html` | Location AR — dev/adjustment mode (full UI, sliders, YAML export) |
-| `location-ar-prod.html` | Location AR — production mode (minimal UI) |
-| `marker-ar.html` | Hiro marker AR via A-Frame + AR.js |
-| `marker-print.html` | A4 print template for the Hiro marker |
-| `matterport.html` | Matterport iframe wrapper |
-| `location-ar.html`, `heiRiver-ar.html` | Legacy redirects |
+| `index.html` | Landing page linking to the main modes |
+| `marker.html` | Thin entry that routes users to the marker experience |
+| `marker-ar.html` | Hiro marker AR implementation |
+| `viewer.html` | `model-viewer` based 3D / native AR page |
+| `location.html` | WebXR / DeviceOrientation location AR page |
+| `marker-print.html` | Printable Hiro marker |
+| `matterport.html` | Matterport compatibility page |
 
-### Source Modules
+## Source Layout
 
-- **`src/location/core.ts`** — `LocationScene` class: the core GPS+three.js engine. Wraps LocAR.js, handles GPS smoothing (8-sample moving average + accuracy weighting), dual orientation mode (`sensor` vs `touch` fallback), WebXR integration, and elevation handling.
+- `src/location/main.ts`
+  Bootstraps location AR, loads config, checks WebXR support, and starts either the XR path or the fallback path.
 
-- **`src/location-ar/main.ts`** — High-level orchestration for location AR (~1600 lines). Loads YAML config, spawns `LocationScene`, loads GLB models via `THREE.GLTFLoader`, builds all UI (location selector, mode switcher, height/scale/rotation/offset sliders, YAML export button).
+- `src/location/webxr-session.ts`
+  Starts `immersive-ar`, requests `local-floor`, converts GPS coordinates into local meters, and places models into `scene`.
 
-- **`src/marker-ar/main.ts`** — A-Frame marker AR. Handles pinch-zoom (2-touch), drag-rotation (1-touch), and ± zoom buttons for the `suimon-kousin.glb` model.
+- `src/location/orientation-fallback.ts`
+  Runs the non-WebXR path with `getUserMedia`, `watchPosition`, and `deviceorientation`. Camera updates and model placement stay separate.
 
-- **`src/matterport/main.ts`** — Validates and redirects to a Matterport URL from a `data-matterport-url` attribute.
+- `src/location/config.ts`
+  Loads `public/config/locations.yaml` and resolves model filenames through `src/models/index.ts`.
 
-- **`src/models/index.ts`** — Exports `MODEL_URLS` using `import.meta.url`-relative paths for bundler-aware GLB resolution.
+- `src/utils/geo-converter.ts`
+  Converts GPS coordinates to Three.js local coordinates using a simple ENU-style approximation.
 
-### Configuration
+- `src/viewer/main.ts`
+  Loads `public/config/models.yaml`, initializes `<model-viewer>`, and delegates AR launch to Quick Look / Scene Viewer.
 
-Location data lives in `public/config/locations.yaml` (dev) and `public/config/locations-heiRiver.yaml` (prod). These YAML files are fetched at runtime using `js-yaml` (loaded from CDN, not bundled). Key YAML fields per location:
+- `src/marker-ar/main.ts`
+  Marker AR behavior, including model scaling and touch gestures.
+
+- `src/models/index.ts`
+  Central source of Vite-resolved GLB URLs.
+
+## Configuration
+
+### `public/config/locations.yaml`
+
+Used by `location.html`. Structure:
 
 ```yaml
-id, name, latitude, longitude
-altitude / baseAltitudeMeters   # priority order for height
-defaultHeight, defaultSize, defaultRotationY
-offsetEast, offsetNorth
-model                           # GLB filename under src/models/
+origin:
+  lat: 39.6395435045501
+  lng: 141.96414846972124
+  altitude: 0
+
+models:
+  - id: heigawa_suimon
+    model: "suimon-kousin.glb"
+    lat: 39.6395435045501
+    lng: 141.96414846972124
+    altitude: 0
+    heading: -2
+    scale: 1.0
+    realHeightMeters: 8.5
 ```
 
-### Key Dependencies
+### `public/config/models.yaml`
 
-| Library | Source | Role |
-|---------|--------|------|
-| `locar` | npm | GPS-to-3D coordinate mapping |
-| `three` | npm | 3D rendering |
-| `A-Frame 1.4.1` | CDN | Entity-component system for marker AR |
-| `AR.js 3.4.5` | CDN | Hiro marker detection |
-| `js-yaml 4.1.0` | CDN | Runtime YAML parsing |
-| `leaflet 1.9.4` | CDN | Map on index page |
+Used by `viewer.html` to populate selectable GLB / USDZ models.
 
-### Deployment
+## Working Rules For This Repo
 
-GitHub Actions (`.github/workflows/deploy.yaml`) runs `npm ci && npm run build` on push to `main` and deploys `./dist` to GitHub Pages at `/sumionAR/`. The Vite base path is `/sumionAR/` — all asset URLs depend on this.
-
-Camera and GPS APIs require HTTPS (or localhost). iOS requires a manual tap to reconnect device orientation after the first permission prompt.
+- Do not reintroduce LocAR.js. The current location AR stack is WebXR + DeviceOrientation.
+- Do not attach AR models to the camera. Keep them under `scene`.
+- When changing location AR, preserve the split between camera tracking and model placement.
+- Runtime YAML parsing relies on `js-yaml` loaded from CDN in HTML, not bundled into TypeScript.
+- GitHub Pages deploys the app under `/sumionAR/`, so asset paths must remain compatible with the Vite `base` setting.
