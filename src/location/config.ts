@@ -1,18 +1,30 @@
-import { MODEL_URLS } from '../models';
-import type { LocationConfig, ModelConfig } from './types';
+import { resolveAudioAssetPath, resolveModelAssetPath } from '../models';
+import type { AnchorOrigin, LocationConfig, ModelConfig } from './types';
 
 declare const jsyaml: { load(text: string): unknown };
 
-const MODEL_URL_MAP: Record<string, string> = {
-  'duck.glb': MODEL_URLS.duck,
-  'suimon-kousin.glb': MODEL_URLS.suimon,
-  'wankosoba.glb': MODEL_URLS.wankosoba,
-};
+function resolveConfiguredModelPath(raw: Record<string, unknown>): string | null {
+  const assetId = typeof raw.assetId === 'string' ? raw.assetId : null;
+  const legacyValue =
+    typeof raw.model === 'string'
+      ? raw.model
+      : typeof raw.glb === 'string'
+        ? raw.glb
+        : null;
 
-function resolveModelPath(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const fileName = value.split('/').pop()?.toLowerCase() ?? '';
-  return MODEL_URL_MAP[fileName] ?? null;
+  return resolveModelAssetPath(assetId ?? legacyValue);
+}
+
+function resolveConfiguredAudioPath(raw: Record<string, unknown>): string | undefined {
+  const audioId = typeof raw.audioId === 'string' ? raw.audioId : null;
+  const legacyValue =
+    typeof raw.audio === 'string'
+      ? raw.audio
+      : typeof raw.audioPath === 'string'
+        ? raw.audioPath
+        : null;
+
+  return resolveAudioAssetPath(audioId ?? legacyValue) ?? undefined;
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -20,10 +32,24 @@ function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export async function loadLocationConfig(): Promise<LocationConfig> {
-  const res = await fetch('config/locations.yaml', { cache: 'no-store' });
+function toOptionalPositiveNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function toAnchorOrigin(raw: Record<string, unknown>): AnchorOrigin {
+  return {
+    lat: toNumber(raw.lat ?? raw.latitude),
+    lng: toNumber(raw.lng ?? raw.longitude),
+    altitude: toNumber(raw.altitude, 0),
+    description: typeof raw.description === 'string' ? raw.description : undefined,
+  };
+}
+
+export async function loadLocationConfig(configUrl = 'config/locations.yaml'): Promise<LocationConfig> {
+  const res = await fetch(configUrl, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error(`locations.yaml の取得に失敗しました: ${res.status}`);
+    throw new Error(`${configUrl} の取得に失敗しました: ${res.status}`);
   }
   const text = await res.text();
   const parsed = jsyaml.load(text) as Record<string, unknown> | null;
@@ -34,7 +60,7 @@ export async function loadLocationConfig(): Promise<LocationConfig> {
     .map((entry): ModelConfig | null => {
       if (!entry || typeof entry !== 'object') return null;
       const raw = entry as Record<string, unknown>;
-      const modelPath = resolveModelPath(raw.model ?? raw.glb);
+      const modelPath = resolveConfiguredModelPath(raw);
       if (!modelPath) return null;
       return {
         id: typeof raw.id === 'string' ? raw.id : modelPath,
@@ -48,19 +74,32 @@ export async function loadLocationConfig(): Promise<LocationConfig> {
         scale: toNumber(raw.scale, 1),
         realHeightMeters: toNumber(raw.realHeightMeters, 0) || undefined,
         description: typeof raw.description === 'string' ? raw.description : undefined,
+        audioPath: resolveConfiguredAudioPath(raw),
+        autoPlayAudio: typeof raw.autoPlayAudio === 'boolean' ? raw.autoPlayAudio : undefined,
+        gpsAccuracyMeters: toOptionalPositiveNumber(raw.gpsAccuracyMeters),
       };
     })
     .filter((entry): entry is ModelConfig => entry !== null);
 
-  return {
-    origin: originValue
+  const origin = originValue ? toAnchorOrigin(originValue) : undefined;
+  const resolvedOrigin =
+    origin ??
+    (models[0]
       ? {
-          lat: toNumber(originValue.lat ?? originValue.latitude),
-          lng: toNumber(originValue.lng ?? originValue.longitude),
-          altitude: toNumber(originValue.altitude, 0),
-          description: typeof originValue.description === 'string' ? originValue.description : undefined,
+          lat: models[0].lat,
+          lng: models[0].lng,
+          altitude: models[0].altitude ?? 0,
+          description: models[0].description ?? models[0].name,
         }
-      : undefined,
+      : null);
+
+  if (!resolvedOrigin) {
+    throw new Error('固定アンカー原点を解決できません。origin または models[0] の座標を設定してください');
+  }
+
+  return {
+    origin,
+    resolvedOrigin,
     models,
   };
 }

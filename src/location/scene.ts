@@ -4,6 +4,7 @@ export function setupThreeJS(container: HTMLElement): {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
+  dispose: () => void;
 } {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 5000);
@@ -25,11 +26,20 @@ export function setupThreeJS(container: HTMLElement): {
   scene.add(ambient);
   scene.add(directional);
 
-  window.addEventListener('resize', () => {
+  const handleResize = () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  };
 
-  return { scene, camera, renderer };
+  window.addEventListener('resize', handleResize);
+
+  const dispose = (): void => {
+    window.removeEventListener('resize', handleResize);
+    renderer.setAnimationLoop(null);
+    renderer.dispose();
+    container.replaceChildren();
+  };
+
+  return { scene, camera, renderer, dispose };
 }

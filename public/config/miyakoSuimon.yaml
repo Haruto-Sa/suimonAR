@@ -1,0 +1,20 @@
+origin:
+  lat: 39.6395435045501
+  lng: 141.96414846972124
+  altitude: 0
+  description: "閉伊川水門 基準点（音声AR）"
+
+models:
+  - id: heigawa_suimon_audio
+    name: "閉伊川水門 音声AR"
+    assetId: "suimon-small-audio-glb"
+    audioId: "suimon-small-audio-mp3"
+    autoPlayAudio: true
+    gpsAccuracyMeters: 25
+    lat: 39.6395435045501
+    lng: 141.96414846972124
+    altitude: 0
+    heading: -2
+    scale: 10.0
+    realHeightMeters: 8.5
+    description: "閉伊川水門 小型モデル + 音声案内"

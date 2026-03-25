@@ -2,6 +2,7 @@ export interface GeoPoint {
   lat: number;
   lng: number;
   altitude?: number;
+  accuracy?: number;
 }
 
 export interface ModelConfig extends GeoPoint {
@@ -13,9 +14,17 @@ export interface ModelConfig extends GeoPoint {
   scale?: number;
   realHeightMeters?: number;
   description?: string;
+  audioPath?: string;
+  autoPlayAudio?: boolean;
+  gpsAccuracyMeters?: number;
+}
+
+export interface AnchorOrigin extends GeoPoint {
+  description?: string;
 }
 
 export interface LocationConfig {
-  origin?: GeoPoint & { description?: string };
+  origin?: AnchorOrigin;
+  resolvedOrigin: AnchorOrigin;
   models: ModelConfig[];
 }

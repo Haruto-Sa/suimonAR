@@ -29,10 +29,12 @@
         margin-bottom: 18px;
         padding: 10px 16px;
         border-radius: 999px;
+        border: 0;
+        font: inherit;
+        font-weight: 700;
         background: rgba(255,255,255,0.08);
         border: 1px solid rgba(255,255,255,0.14);
         color: #fff;
-        text-decoration: none;
       }
       .layout {
         display: grid;
@@ -209,7 +211,7 @@
   </head>
   <body>
     <div class="page">
-      <a class="back-link" href="index.html">← トップへ戻る</a>
+      <button id="page-back-button" class="back-link" type="button">← 戻る</button>
 
       <div class="layout">
         <section class="viewer-shell">
@@ -223,6 +225,7 @@
             ar
             ar-modes="webxr scene-viewer quick-look"
             ar-scale="fixed"
+            autoplay
             camera-controls
             auto-rotate
             interaction-prompt="auto"

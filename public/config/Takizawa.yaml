@@ -1,6 +1,6 @@
 origin:
-  lat: 39.6395435045501
-  lng: 141.96414846972124
+  lat: 39.802708866845535
+  lng: 141.13570198406313
   altitude: 0
   description: "閉伊川水門 基準点（藤原地区）"
 
@@ -9,10 +9,10 @@ models:
     name: "閉伊川水門"
     model: "suimon-kousin.glb"
     usdz: ""
-    lat: 39.6395435045501
-    lng: 141.96414846972124
+    lat: 39.802708866845535
+    lng: 141.13570198406313
     altitude: 0
     heading: -2
-    scale: 10.0
+    scale: 5.0
     realHeightMeters: 8.5
     description: "閉伊川水門 本体"

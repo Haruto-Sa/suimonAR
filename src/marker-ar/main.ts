@@ -1,4 +1,4 @@
-import { MODEL_URLS } from '../models';
+import { MODEL_ASSET_URLS } from '../models';
 
 const BUILD_BASE = (import.meta as any).env?.BASE_URL ?? '/';
 
@@ -73,11 +73,12 @@ function applyRotation(x: number, y: number): void {
 }
 
 function setSuimonModelSrc(): void {
-  const suimonUrl = normalizeAssetUrl(MODEL_URLS.suimon);
+  const suimonUrl = normalizeAssetUrl(MODEL_ASSET_URLS['suimon-small-audio-glb']);
 
   const nodes = document.querySelectorAll<HTMLElement>('[data-model-entity="suimon"]');
   nodes.forEach((el) => {
     el.setAttribute('gltf-model', `url(${suimonUrl})`);
+    el.setAttribute('animation-mixer', 'clip: *; loop: repeat');
     el.setAttribute('visible', 'true');
   });
 

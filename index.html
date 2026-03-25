@@ -29,7 +29,7 @@
   <body>
     <div class="wrap">
       <h1>suimonAR</h1>
-      <p class="lead">閉伊川水門の 3D モデルを、マーカーAR・モデルビューア・ロケーションARで確認できる Web アプリケーションです。</p>
+      <p class="lead">閉伊川水門の 3D モデルを、マーカーAR・モデルビューア・ロケーションAR・Matterportで確認できる Web アプリケーションです。</p>
 
       <div class="grid">
         <div class="card">
@@ -54,9 +54,19 @@
         <div class="card">
           <div class="card-icon">📍</div>
           <h2>ロケーションベース AR</h2>
-          <p>GPS と WebXR / DeviceOrientation を使って、現実空間に固定したモデルを表示します。</p>
+          <p>GPS と WebXR / DeviceOrientation を使って、現実空間に固定したモデルを表示します。音声付きの専用ページも追加しています。</p>
           <div class="card-actions">
-            <a class="btn" href="location.html">location を開く</a>
+            <a class="btn" href="location-ar.html">audio AR を開く</a>
+            <a class="btn-outline" href="location.html">location を開く</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🏠</div>
+          <h2>Matterport</h2>
+          <p>ページ内埋め込みで Matterport 空間を表示します。</p>
+          <div class="card-actions">
+            <a class="btn" href="matterport.html">Matterport を開く</a>
           </div>
         </div>
       </div>
@@ -70,8 +80,6 @@
           <a class="btn-outline" href="marker-print.html">印刷ページへ</a>
         </div>
       </div>
-
-      <div class="note">Matterport ページは互換のため残していますが、主要導線は marker / viewer / location の 3 モードに整理しました。</div>
     </div>
   </body>
 </html>

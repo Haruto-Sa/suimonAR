@@ -1,29 +1,19 @@
 # モデル情報のみを定義する YAML
-# Duck / Suimon / Wankosoba の3モデルを定義します。
+# 水門モデルを先頭にして、AR 確認ページでは閉伊川水門を既定表示にします。
 
 models:
-  - id: duck
-    name: "Duck"
-    kind: duck           # TypeScript 側の ModelKind と対応
-    glb: "Duck.glb"      # src/models/Duck.glb （Vite によりビルド時に解決）
+  - id: suimon_audio
+    name: "閉伊川水門 アニメーション"
+    assetId: "suimon-small-audio-glb"
+    glb: "suimon-small-with-audio-ar.glb"
     defaultHeight: 3
-    defaultSize: 12
+    defaultSize: 1
     defaultRotationY: 0
 
   - id: suimon
     name: "Suimon 水門"
-    kind: suimon
     glb: "suimon-kousin.glb"  # src/models/suimon-kousin.glb
     defaultHeight: 3
-    defaultSize: 12
+    defaultSize: 1
     defaultRotationY: 0
-
-  - id: wankosoba
-    name: "Wankosoba"
-    kind: wankosoba
-    glb: "wankosoba.glb" # src/models/wankosoba.glb
-    defaultHeight: 3
-    defaultSize: 12
-    defaultRotationY: 0
-
 

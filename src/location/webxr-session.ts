@@ -1,41 +1,25 @@
 import * as THREE from 'three';
 import { GeoConverter } from '../utils/geo-converter';
-import { loadGLTF, fitModelScale } from './load-gltf';
+import type { GPSFix } from './gps';
+import { placeModels } from './place-models';
 import type { GeoPoint, ModelConfig } from './types';
 
-async function getCurrentGPSPosition(): Promise<GeoPoint> {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          altitude: position.coords.altitude ?? 0,
-        }),
-      reject,
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
-  });
-}
+type XRSessionInitWithDomOverlay = XRSessionInit & {
+  domOverlay?: { root: Element };
+};
 
-async function placeModels(scene: THREE.Scene, converter: GeoConverter, models: ModelConfig[]): Promise<void> {
-  for (const config of models) {
-    const localPos = converter.toLocal({
-      lat: config.lat,
-      lng: config.lng,
-      altitude: config.altitude,
-    });
+type StartWebXROptions = {
+  initialFix: GPSFix;
+  worldOrigin: GeoPoint;
+  preciseGPS: boolean;
+  setStatus: (message: string) => void;
+  setGPSStatus: (message: string) => void;
+  overlayRoot?: Element | null;
+};
 
-    const model = await loadGLTF(config.modelPath);
-    if (config.realHeightMeters) {
-      fitModelScale(model, config.realHeightMeters, config.scale ?? 1);
-    } else if (config.scale) {
-      model.scale.setScalar(config.scale);
-    }
-    model.position.set(localPos.x, localPos.y, localPos.z);
-    model.rotation.y = THREE.MathUtils.degToRad(config.heading ?? 0);
-    scene.add(model);
-  }
+export interface WebXRSessionController {
+  stop: () => Promise<void>;
+  onEnd: Promise<void>;
 }
 
 export async function startWebXRSession(
@@ -43,41 +27,87 @@ export async function startWebXRSession(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   models: ModelConfig[],
-  setStatus: (message: string) => void,
-): Promise<void> {
+  options: StartWebXROptions,
+): Promise<WebXRSessionController> {
   if (!navigator.xr) {
     throw new Error('WebXR が利用できません');
   }
 
+  const { initialFix, worldOrigin, preciseGPS, setStatus, setGPSStatus, overlayRoot } = options;
+  const clock = new THREE.Clock();
+
   setStatus('WebXR セッションを開始しています...');
-  const session = await navigator.xr.requestSession('immersive-ar', {
+  const sessionInit: XRSessionInitWithDomOverlay = {
     requiredFeatures: ['local-floor'],
-    optionalFeatures: ['hit-test'],
-  });
+    optionalFeatures: ['hit-test', 'dom-overlay'],
+  };
+
+  if (overlayRoot) {
+    sessionInit.domOverlay = { root: overlayRoot };
+  }
+
+  const session = await navigator.xr.requestSession('immersive-ar', sessionInit);
 
   renderer.xr.enabled = true;
   await renderer.xr.setSession(session);
   const refSpace = await session.requestReferenceSpace('local-floor');
 
-  setStatus('GPS で原点を取得しています...');
-  const origin = await getCurrentGPSPosition();
-  const converter = new GeoConverter(origin);
+  const accuracyText =
+    typeof initialFix.accuracy === 'number' ? `${Math.round(initialFix.accuracy)}m` : '不明';
+  setGPSStatus(
+    preciseGPS
+      ? `GPS: ${accuracyText} で原点確定`
+      : `GPS: ${accuracyText} のため低精度で原点確定`,
+  );
+  const converter = new GeoConverter(worldOrigin);
+  const userOffset = converter.toLocal(initialFix);
 
-  setStatus('モデルをワールド空間へ配置しています...');
-  await placeModels(scene, converter, models);
+  setStatus('YAML 座標の固定アンカーへモデルを配置しています...');
+  const { anchorRoot, mixers, clipCount, fallbackCount } = await placeModels(scene, converter, models);
+  anchorRoot.position.set(-userOffset.x, -userOffset.y, -userOffset.z);
 
-  session.addEventListener('end', () => {
-    renderer.setAnimationLoop(null);
-    setStatus('WebXR セッションが終了しました');
+  let ended = false;
+  let resolveEnd = () => {};
+  const onEnd = new Promise<void>((resolve) => {
+    resolveEnd = resolve;
   });
+
+  const handleSessionEnd = () => {
+    if (ended) return;
+    ended = true;
+    renderer.setAnimationLoop(null);
+    renderer.xr.enabled = false;
+    setStatus('WebXR セッションが終了しました');
+    resolveEnd();
+  };
+
+  session.addEventListener('end', handleSessionEnd, { once: true });
 
   renderer.setAnimationLoop((_time, frame) => {
     if (!frame) return;
     const pose = frame.getViewerPose(refSpace);
-    if (pose) {
-      renderer.render(scene, camera);
-    }
+    if (!pose) return;
+
+    const delta = clock.getDelta();
+    mixers.forEach((mixer) => mixer.update(delta));
+    renderer.render(scene, camera);
   });
 
-  setStatus('WebXR immersive-ar モードで表示中');
+  setStatus(
+    [
+      'WebXR immersive-ar モードで表示中',
+      clipCount > 0 ? `アニメーション ${clipCount} 本再生中` : null,
+      fallbackCount > 0 ? `簡易表示 ${fallbackCount} 件` : null,
+    ]
+      .filter(Boolean)
+      .join(' / '),
+  );
+
+  return {
+    stop: async () => {
+      if (ended) return;
+      await session.end();
+    },
+    onEnd,
+  };
 }

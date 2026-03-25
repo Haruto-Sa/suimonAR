@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="styles.css" />
     <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
     <script src="https://rawcdn.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.4/dist/aframe-extras.min.js"></script>
     <style>
       body {
         margin: 0;
@@ -185,6 +186,7 @@
         <a-entity
           id="model-suimon"
           data-model-entity="suimon"
+          animation-mixer="clip: *; loop: repeat"
           scale="0.01 0.01 0.01"
           position="0 0.2 0"
           rotation="0 0 0"

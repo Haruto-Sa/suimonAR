@@ -1,13 +1,29 @@
 import * as THREE from 'three';
 import { GeoConverter } from '../utils/geo-converter';
-import { loadGLTF, fitModelScale } from './load-gltf';
+import { startGPSWatch } from './gps';
+import { placeModels } from './place-models';
+import type { GPSFix } from './gps';
 import type { GeoPoint, ModelConfig } from './types';
 
 type DeviceOrientationWithWebkit = DeviceOrientationEvent & {
   webkitCompassHeading?: number;
 };
 
-async function setupCameraBackground(scene: THREE.Scene): Promise<void> {
+type StartOrientationFallbackOptions = {
+  initialFix: GPSFix;
+  worldOrigin: GeoPoint;
+  preciseGPS: boolean;
+  setStatus: (message: string) => void;
+  setGPSStatus: (message: string) => void;
+};
+
+export interface OrientationFallbackController {
+  stop: () => Promise<void>;
+}
+
+async function setupCameraBackground(
+  scene: THREE.Scene,
+): Promise<{ stop: () => void }> {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'environment' },
     audio: false,
@@ -18,59 +34,52 @@ async function setupCameraBackground(scene: THREE.Scene): Promise<void> {
   video.setAttribute('playsinline', '');
   video.muted = true;
   await video.play();
-  scene.background = new THREE.VideoTexture(video);
+
+  const texture = new THREE.VideoTexture(video);
+  scene.background = texture;
+
+  return {
+    stop: () => {
+      scene.background = null;
+      texture.dispose();
+      video.pause();
+      video.srcObject = null;
+      stream.getTracks().forEach((track) => track.stop());
+    },
+  };
 }
 
-async function placeModels(scene: THREE.Scene, converter: GeoConverter, models: ModelConfig[]): Promise<void> {
-  for (const config of models) {
-    const localPos = converter.toLocal({
-      lat: config.lat,
-      lng: config.lng,
-      altitude: config.altitude,
-    });
-
-    const model = await loadGLTF(config.modelPath);
-    if (config.realHeightMeters) {
-      fitModelScale(model, config.realHeightMeters, config.scale ?? 1);
-    } else if (config.scale) {
-      model.scale.setScalar(config.scale);
-    }
-    model.position.set(localPos.x, localPos.y, localPos.z);
-    model.rotation.y = THREE.MathUtils.degToRad(config.heading ?? 0);
-    scene.add(model);
-  }
-}
+const ORIENTATION_EULER = new THREE.Euler();
+const ORIENTATION_ZEE = new THREE.Vector3(0, 0, 1);
+const ORIENTATION_Q0 = new THREE.Quaternion();
+const ORIENTATION_Q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
 
 function applyOrientation(camera: THREE.PerspectiveCamera, event: DeviceOrientationWithWebkit): void {
   if (event.alpha === null || event.beta === null || event.gamma === null) {
     return;
   }
 
-  const alpha = THREE.MathUtils.degToRad(event.alpha);
+  const alphaSource =
+    typeof event.webkitCompassHeading === 'number'
+      ? 360 - event.webkitCompassHeading
+      : event.alpha;
+
+  const alpha = THREE.MathUtils.degToRad(alphaSource);
   const beta = THREE.MathUtils.degToRad(event.beta);
   const gamma = THREE.MathUtils.degToRad(event.gamma);
-  const euler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
-  camera.quaternion.setFromEuler(euler);
-
   const screenAngle =
     window.screen.orientation?.angle ??
     (typeof window.orientation === 'number' ? window.orientation : 0);
 
-  const screenQ = new THREE.Quaternion().setFromAxisAngle(
-    new THREE.Vector3(0, 0, 1),
-    -THREE.MathUtils.degToRad(screenAngle),
+  ORIENTATION_EULER.set(beta, alpha, -gamma, 'YXZ');
+  camera.quaternion.setFromEuler(ORIENTATION_EULER);
+  camera.quaternion.multiply(ORIENTATION_Q1);
+  camera.quaternion.multiply(
+    ORIENTATION_Q0.setFromAxisAngle(
+      ORIENTATION_ZEE,
+      -THREE.MathUtils.degToRad(screenAngle),
+    ),
   );
-  camera.quaternion.multiply(screenQ);
-
-  const fixQ = new THREE.Quaternion().setFromAxisAngle(
-    new THREE.Vector3(1, 0, 0),
-    -Math.PI / 2,
-  );
-  camera.quaternion.multiply(fixQ);
-
-  if (typeof event.webkitCompassHeading === 'number') {
-    camera.rotation.y = THREE.MathUtils.degToRad(360 - event.webkitCompassHeading);
-  }
 }
 
 export async function startOrientationFallback(
@@ -78,54 +87,89 @@ export async function startOrientationFallback(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   models: ModelConfig[],
-  setStatus: (message: string) => void,
-): Promise<void> {
-  let converter: GeoConverter | null = null;
-  let modelsPlaced = false;
+  options: StartOrientationFallbackOptions,
+): Promise<OrientationFallbackController> {
+  const { initialFix, worldOrigin, preciseGPS, setStatus, setGPSStatus } = options;
+  const converter = new GeoConverter(worldOrigin);
+  const clock = new THREE.Clock();
 
   setStatus('カメラ背景を起動しています...');
-  await setupCameraBackground(scene);
+  const background = await setupCameraBackground(scene);
+  const initialOffset = converter.toLocal(initialFix);
+  camera.position.set(initialOffset.x, initialOffset.y + 1.6, initialOffset.z);
 
-  setStatus('GPS を監視しています...');
-  navigator.geolocation.watchPosition(
-    (position) => {
-      const current: GeoPoint = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        altitude: position.coords.altitude ?? 0,
-      };
-
-      if (!converter) {
-        converter = new GeoConverter(current);
-        camera.position.set(0, 1.6, 0);
-      }
-
-      if (!modelsPlaced && converter) {
-        modelsPlaced = true;
-        void placeModels(scene, converter, models).then(() => {
-          setStatus('DeviceOrientation フォールバックで表示中');
-        });
-        return;
-      }
-
-      if (converter) {
-        const offset = converter.toLocal(current);
-        camera.position.set(offset.x, offset.y + 1.6, offset.z);
-      }
-    },
-    (error) => {
-      setStatus(`GPS error: ${error.message}`);
-    },
-    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
+  const accuracyText =
+    typeof initialFix.accuracy === 'number' ? `${Math.round(initialFix.accuracy)}m` : '不明';
+  setGPSStatus(
+    preciseGPS
+      ? `GPS: ${accuracyText} で原点確定`
+      : `GPS: ${accuracyText} のため低精度で原点確定`,
   );
 
-  window.addEventListener('deviceorientation', (event) => {
+  setStatus('YAML 座標の固定アンカーへモデルを配置しています...');
+  const { anchorRoot, mixers, clipCount, fallbackCount } = await placeModels(scene, converter, models);
+  setStatus('方位センサーを初期化しています...');
+
+  const gpsWatchId = startGPSWatch(
+    (current) => {
+      const offset = converter.toLocal(current);
+      camera.position.set(offset.x, offset.y + 1.6, offset.z);
+      const nextAccuracyText =
+        typeof current.accuracy === 'number' ? `${Math.round(current.accuracy)}m` : '不明';
+      const firstModel = anchorRoot.children[0];
+      const distText = firstModel
+        ? ` / モデルまで ${Math.round(Math.sqrt(
+            Math.pow(camera.position.x - firstModel.position.x, 2) +
+            Math.pow(camera.position.z - firstModel.position.z, 2),
+          ))}m`
+        : '';
+      setGPSStatus(`GPS: 追跡中 ${nextAccuracyText}${distText}`);
+    },
+    (message) => {
+      setStatus(message);
+    },
+  );
+
+  const handleOrientation = (event: DeviceOrientationEvent) => {
     applyOrientation(camera, event as DeviceOrientationWithWebkit);
-  });
+  };
+
+  window.addEventListener('deviceorientation', handleOrientation);
+
+  let animationFrameId = 0;
+  let stopped = false;
 
   const animate = () => {
+    if (stopped) return;
+    const delta = clock.getDelta();
+    mixers.forEach((mixer) => mixer.update(delta));
     renderer.render(scene, camera);
-    requestAnimationFrame(animate);
+    animationFrameId = window.requestAnimationFrame(animate);
   };
+
+  setStatus(
+    [
+      'DeviceOrientation フォールバックで表示中',
+      clipCount > 0 ? `アニメーション ${clipCount} 本再生中` : null,
+      fallbackCount > 0 ? `簡易表示 ${fallbackCount} 件` : null,
+    ]
+      .filter(Boolean)
+      .join(' / '),
+  );
   animate();
+
+  return {
+    stop: async () => {
+      if (stopped) return;
+      stopped = true;
+      if (animationFrameId) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      navigator.geolocation.clearWatch(gpsWatchId);
+      window.removeEventListener('deviceorientation', handleOrientation);
+      background.stop();
+      renderer.setAnimationLoop(null);
+      setStatus('DeviceOrientation フォールバックを終了しました');
+    },
+  };
 }

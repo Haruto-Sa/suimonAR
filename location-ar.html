@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>suimonAR Location</title>
+    <title>suimonAR Location Audio</title>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     <style>
       html, body {
@@ -12,7 +12,10 @@
         margin: 0;
         overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #050914;
+        background:
+          radial-gradient(circle at top right, rgba(245, 158, 11, 0.18), transparent 22%),
+          radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.2), transparent 26%),
+          #04111a;
         color: #f7f9fc;
       }
       #app {
@@ -32,15 +35,15 @@
         display: grid;
         place-items: center;
         padding: 24px;
-        background: radial-gradient(circle at top left, rgba(110, 89, 255, 0.28), transparent 24%), rgba(6, 8, 18, 0.88);
+        background: radial-gradient(circle at top left, rgba(14, 165, 233, 0.24), transparent 24%), rgba(4, 17, 26, 0.9);
         backdrop-filter: blur(12px);
       }
       .card {
-        width: min(520px, 100%);
+        width: min(560px, 100%);
         padding: 24px 28px 28px;
-        border-radius: 24px;
+        border-radius: 28px;
         border: 1px solid rgba(255,255,255,0.16);
-        background: rgba(16, 21, 44, 0.88);
+        background: rgba(10, 23, 34, 0.88);
         box-shadow: 0 30px 80px rgba(0,0,0,0.3);
         overflow: hidden;
       }
@@ -119,7 +122,7 @@
       }
       .btn {
         color: #05121c;
-        background: linear-gradient(135deg, #7dd3fc, #c4b5fd);
+        background: linear-gradient(135deg, #f59e0b, #7dd3fc);
       }
       .btn:disabled { opacity: 0.5; }
       .link-btn {
@@ -226,7 +229,7 @@
       .hud-card {
         padding: 10px 12px;
         border-radius: 16px;
-        background: rgba(8, 11, 25, 0.78);
+        background: rgba(8, 11, 25, 0.8);
         border: 1px solid rgba(255,255,255,0.12);
         backdrop-filter: blur(10px);
         pointer-events: auto;
@@ -254,7 +257,7 @@
         height: 34px;
         border-radius: 50%;
         border: 0;
-        background: linear-gradient(135deg, #7dd3fc, #c4b5fd);
+        background: linear-gradient(135deg, #f59e0b, #7dd3fc);
         color: #05121c;
         font-size: 14px;
         font-weight: 700;
@@ -274,7 +277,7 @@
       .audio-seek {
         width: 100%;
         height: 3px;
-        accent-color: #c4b5fd;
+        accent-color: #7dd3fc;
         cursor: pointer;
         margin: 0;
       }
@@ -321,9 +324,8 @@
 
           <!-- Config panel -->
           <div id="tab-panel-config">
-            <h1>ロケーションベース AR</h1>
-            <p>Android Chrome では WebXR `immersive-ar`、iOS Safari などでは DeviceOrientation + GPS フォールバックで起動します。</p>
-            <p>モデルはワールド空間に固定配置し、カメラ更新と分離して描画します。</p>
+            <h1>ロケーションベース AR + 音声</h1>
+            <p>小型水門モデルを現在地基準で空間に配置し、開始時に音声案内も再生します。</p>
             <div class="field">
               <label for="config-select">配置設定</label>
               <select id="config-select">
@@ -332,7 +334,7 @@
                 <option value="takizawa">滝沢</option>
               </select>
             </div>
-            <p id="config-description" class="field-help">現在地付近に閉伊川水門モデルを配置します。</p>
+            <p id="config-description" class="field-help">現在地付近に閉伊川水門の小型モデルを配置します。</p>
             <div class="actions">
               <button id="start-button" class="btn" type="button" disabled>AR を開始</button>
               <a class="link-btn" href="viewer.html">viewer を開く</a>
@@ -344,7 +346,7 @@
           <!-- Map panel -->
           <div id="tab-panel-map" hidden>
             <p class="map-panel-title">配置マップ</p>
-            <canvas id="map-canvas" width="464" height="264"></canvas>
+            <canvas id="map-canvas" width="504" height="288"></canvas>
             <p id="map-status">GPS を待っています...</p>
           </div>
 
@@ -354,7 +356,7 @@
       <!-- HUD -->
       <div class="hud">
         <div class="hud-card">
-          <strong>suimonAR location</strong>
+          <strong>suimonAR audio</strong>
           <p id="mode-label">mode: standby</p>
         </div>
         <div class="hud-card">
@@ -382,6 +384,6 @@
       </div>
     </div>
 
-    <script type="module" src="/src/location/main.ts"></script>
+    <script type="module" src="/src/location-ar/main.ts"></script>
   </body>
 </html>

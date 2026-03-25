@@ -3,7 +3,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const loader = new GLTFLoader();
 
-export async function loadGLTF(url: string): Promise<THREE.Group> {
+export interface LoadedGLTF {
+  root: THREE.Group;
+  animations: THREE.AnimationClip[];
+}
+
+export async function loadGLTF(url: string): Promise<LoadedGLTF> {
   const gltf = await loader.loadAsync(url);
   const root = gltf.scene;
   root.traverse((child) => {
@@ -11,7 +16,10 @@ export async function loadGLTF(url: string): Promise<THREE.Group> {
       child.frustumCulled = false;
     }
   });
-  return root;
+  return {
+    root,
+    animations: gltf.animations,
+  };
 }
 
 export function fitModelScale(model: THREE.Object3D, realHeightMeters: number, multiplier = 1): void {

@@ -1,5 +1,5 @@
 import '@google/model-viewer';
-import { MODEL_URLS } from '../models';
+import { MODEL_URLS, resolveModelAssetPath } from '../models';
 
 declare const jsyaml: { load(text: string): unknown };
 
@@ -7,6 +7,7 @@ type ViewerModelConfig = {
   id: string;
   name: string;
   glb: string;
+  assetId?: string | null;
   usdz?: string | null;
   defaultRotationY?: number;
   defaultSize?: number;
@@ -18,6 +19,8 @@ type ModelViewerElement = HTMLElement & {
 };
 
 const modelViewer = document.getElementById('model-viewer') as ModelViewerElement | null;
+const arButton = document.getElementById('ar-button') as HTMLButtonElement | null;
+const pageBackButton = document.getElementById('page-back-button') as HTMLButtonElement | null;
 const modelSelect = document.getElementById('model-select') as HTMLSelectElement | null;
 const rotationSlider = document.getElementById('rotation-slider') as HTMLInputElement | null;
 const rotationValue = document.getElementById('rotation-value') as HTMLElement | null;
@@ -34,12 +37,15 @@ const toast = document.getElementById('toast') as HTMLElement | null;
 let models: ViewerModelConfig[] = [];
 let selectedModel: ViewerModelConfig | null = null;
 let toastTimer = 0;
+let pendingARLaunch = false;
+let arSessionStarted = false;
+let arPageHidden = false;
+let arReturnHandled = false;
+let launchResetTimer = 0;
 
-const MODEL_URL_MAP: Record<string, string> = {
-  'duck.glb': MODEL_URLS.duck,
-  'suimon-kousin.glb': MODEL_URLS.suimon,
-  'wankosoba.glb': MODEL_URLS.wankosoba,
-};
+function navigateBack(): void {
+  window.location.href = 'index.html';
+}
 
 function showToast(message: string): void {
   if (!toast) return;
@@ -54,8 +60,7 @@ function showToast(message: string): void {
 }
 
 function normalizeModelPath(fileName: string): string {
-  const leaf = fileName.split('/').pop()?.toLowerCase() ?? 'suimon-kousin.glb';
-  return MODEL_URL_MAP[leaf] ?? MODEL_URLS.suimon;
+  return resolveModelAssetPath(fileName) ?? MODEL_URLS.suimon;
 }
 
 function applyPreviewTransform(): void {
@@ -77,7 +82,7 @@ function updateInfo(model: ViewerModelConfig): void {
 function applyModel(model: ViewerModelConfig): void {
   if (!modelViewer || !rotationSlider || !scaleSlider || !viewerStatus) return;
   selectedModel = model;
-  modelViewer.setAttribute('src', normalizeModelPath(model.glb));
+  modelViewer.setAttribute('src', normalizeModelPath(model.assetId ?? model.glb));
   if (model.usdz && model.usdz.trim()) {
     modelViewer.setAttribute('ios-src', model.usdz);
   } else {
@@ -85,9 +90,98 @@ function applyModel(model: ViewerModelConfig): void {
   }
   rotationSlider.value = String(model.defaultRotationY ?? 0);
   scaleSlider.value = String(model.defaultSize ?? 1);
+  if (progressFill) progressFill.style.width = '0%';
+  if (progressLabel) progressLabel.textContent = '0%';
   applyPreviewTransform();
   updateInfo(model);
   viewerStatus.textContent = `${model.name} を読み込み中`;
+}
+
+function reapplySelectedModelPreservingTransform(): void {
+  if (!selectedModel || !rotationSlider || !scaleSlider) {
+    return;
+  }
+
+  const rotation = rotationSlider.value;
+  const scale = scaleSlider.value;
+  applyModel(selectedModel);
+  rotationSlider.value = rotation;
+  scaleSlider.value = scale;
+  applyPreviewTransform();
+}
+
+function resetARState(): void {
+  pendingARLaunch = false;
+  arSessionStarted = false;
+  arPageHidden = false;
+  arReturnHandled = false;
+  if (launchResetTimer) {
+    window.clearTimeout(launchResetTimer);
+    launchResetTimer = 0;
+  }
+}
+
+function markARLaunch(): void {
+  if (pendingARLaunch || arSessionStarted) {
+    return;
+  }
+
+  pendingARLaunch = true;
+  arReturnHandled = false;
+  if (viewerStatus) {
+    viewerStatus.textContent = 'AR を起動しています';
+  }
+
+  if (launchResetTimer) {
+    window.clearTimeout(launchResetTimer);
+  }
+
+  launchResetTimer = window.setTimeout(() => {
+    if (!pendingARLaunch || arPageHidden || arSessionStarted) {
+      return;
+    }
+
+    pendingARLaunch = false;
+    if (viewerStatus) {
+      viewerStatus.textContent = 'モデル準備完了';
+    }
+  }, 3000);
+}
+
+function recoverViewer(message: string): void {
+  reapplySelectedModelPreservingTransform();
+  modelViewer?.dismissPoster?.();
+  if (viewerStatus) {
+    viewerStatus.textContent = 'モデル準備完了';
+  }
+  showToast(message);
+}
+
+function scheduleARReturnHandling(message: string): void {
+  if ((!arPageHidden && !arSessionStarted) || arReturnHandled) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (document.visibilityState === 'hidden' || arReturnHandled) {
+      return;
+    }
+
+    arReturnHandled = true;
+    resetARState();
+    if (message === 'AR の起動に失敗しました') {
+      recoverViewer(message);
+      return;
+    }
+
+    window.location.href = 'index.html';
+  }, 120);
+}
+
+function launchAR(): void {
+  if (!modelViewer) return;
+  markARLaunch();
+  modelViewer.activateAR?.();
 }
 
 async function loadModels(): Promise<ViewerModelConfig[]> {
@@ -113,6 +207,7 @@ async function loadModels(): Promise<ViewerModelConfig[]> {
         id: typeof value.id === 'string' ? value.id : glb,
         name: typeof value.name === 'string' ? value.name : glb,
         glb,
+        assetId: typeof value.assetId === 'string' ? value.assetId : null,
         usdz: typeof value.usdz === 'string' ? value.usdz : null,
         defaultRotationY: Number(value.defaultRotationY ?? 0),
         defaultSize: Number(value.defaultSize ?? 1),
@@ -139,8 +234,17 @@ function bindEvents(): void {
     applyPreviewTransform();
   });
 
+  pageBackButton?.addEventListener('click', () => {
+    navigateBack();
+  });
+
+  arButton?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    launchAR();
+  });
+
   modelViewer.addEventListener('click', () => {
-    modelViewer.activateAR?.();
+    launchAR();
   });
 
   modelViewer.addEventListener('progress', (event) => {
@@ -163,17 +267,46 @@ function bindEvents(): void {
     const detail = event as CustomEvent<{ status?: string }>;
     switch (detail.detail?.status) {
       case 'session-started':
+        pendingARLaunch = false;
+        arSessionStarted = true;
+        if (launchResetTimer) {
+          window.clearTimeout(launchResetTimer);
+          launchResetTimer = 0;
+        }
         showToast('AR を開始しました。平面を探しています');
         break;
       case 'object-placed':
         showToast('配置完了。OS 標準の操作で調整してください');
         break;
       case 'failed':
-        showToast('AR の起動に失敗しました');
+        resetARState();
+        recoverViewer('AR の起動に失敗しました');
+        break;
+      case 'not-presenting':
+        scheduleARReturnHandling('AR を終了しました / キャンセルしました');
         break;
       default:
         break;
     }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      if (pendingARLaunch || arSessionStarted) {
+        arPageHidden = true;
+      }
+      return;
+    }
+
+    scheduleARReturnHandling('AR を終了しました / キャンセルしました');
+  });
+
+  window.addEventListener('pageshow', () => {
+    scheduleARReturnHandling('AR を終了しました / キャンセルしました');
+  });
+
+  window.addEventListener('focus', () => {
+    scheduleARReturnHandling('AR を終了しました / キャンセルしました');
   });
 }
 

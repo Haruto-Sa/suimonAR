@@ -50,7 +50,7 @@ GitHub Pages では `https://haruto-sa.github.io/sumionAR/` に `/sumionAR/` ベ
 
 ### `public/config/locations.yaml`
 
-ロケーションベース AR の原点とモデル配置を定義します。
+ロケーションベース AR の固定アンカー原点とモデル配置を定義します。iOS Safari ではこの YAML を基準にモデルを一度だけワールド空間へ配置し、その後はカメラだけを更新します。
 
 ```yaml
 origin:
@@ -75,10 +75,10 @@ models:
 
 | フィールド | 説明 |
 |------------|------|
-| `origin` | GPS 原点。ローカル座標変換の基準点 |
+| `origin` | ローカル座標変換の基準点。未指定時は `models[0]` の座標を内部で採用 |
 | `model` | `src/models/` の GLB ファイル名 |
 | `usdz` | iOS Quick Look 用 USDZ パス。未指定なら GLB ベースでフォールバック |
-| `lat`, `lng`, `altitude` | モデルを置く実座標 |
+| `lat`, `lng`, `altitude` | モデルを置く現実空間の固定座標 |
 | `heading` | モデルの向き（度） |
 | `scale` | 追加倍率 |
 | `realHeightMeters` | 実寸高さ。GLB のバウンディングボックスから実スケールへ合わせる |
@@ -139,6 +139,7 @@ ARjs/
 
 ## 補足
 
-- ロケーション AR では `camera.add(model)` を使わず、すべて `scene.add(model)` で配置します。
-- GPS は原点決定とカメラ位置更新にのみ使い、モデル位置を毎フレーム追従させません。
-- iOS では DeviceOrientation の権限許可が必要です。
+- ロケーション AR では `camera.add(model)` を使わず、固定アンカー用 `Group` 配下にすべて配置します。
+- GPS は固定アンカー原点の解決とカメラ位置更新にのみ使い、モデル位置は毎フレーム追従させません。
+- iOS Safari では `DeviceOrientation + getUserMedia + Geolocation` を使い、更新処理はカメラだけに限定します。
+- GLB の読み込みに失敗した場合だけ、同じ GPS アンカーへ簡易プレーン表示を出します。

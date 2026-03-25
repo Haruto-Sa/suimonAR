@@ -15,6 +15,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         location: 'location.html',
+        'location-ar': 'location-ar.html',
         marker: 'marker.html',
         viewer: 'viewer.html',
         'marker-ar': 'marker-ar.html',

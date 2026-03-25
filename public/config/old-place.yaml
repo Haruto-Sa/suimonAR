@@ -1,0 +1,20 @@
+origin:
+  lat: 39.298433474957456
+  lng: 141.1241173067966
+  altitude: 0
+  description: "閉伊川水門 基準点（藤原地区）"
+
+models:
+  - id: heigawa_suimon-kitakami
+    name: "閉伊川水門-old"
+    assetId: "suimon-small-audio-glb"
+    audioId: "suimon-small-audio-mp3"
+    autoPlayAudio: true
+    usdz: ""
+    lat: 39.298433474957456
+    lng: 141.1241173067966
+    altitude: 0
+    heading: -2
+    scale: 5.0
+    realHeightMeters: 8.5
+    description: "閉伊川水門 本体"

@@ -4,5 +4,8 @@ node_modules/
 dist/
 *.log
 .DS_Store
-CLAUDE.md/
+./CLAUDE.md/
 .claude/
+ARCHITECTURE.md/
+
+./legacy/
