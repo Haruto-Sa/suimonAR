@@ -77,9 +77,18 @@ function setSuimonModelSrc(): void {
 
   const nodes = document.querySelectorAll<HTMLElement>('[data-model-entity="suimon"]');
   nodes.forEach((el) => {
+    el.removeAttribute('animation-mixer');
     el.setAttribute('gltf-model', `url(${suimonUrl})`);
-    el.setAttribute('animation-mixer', 'clip: *; loop: repeat');
     el.setAttribute('visible', 'true');
+
+    el.addEventListener(
+      'model-loaded',
+      () => {
+        el.setAttribute('animation-mixer', 'clip: *; loop: repeat; timeScale: 1');
+        console.log('[marker-ar] animation-mixer started after model-loaded');
+      },
+      { once: true }
+    );
   });
 
   applyScale(INITIAL_SCALE);
