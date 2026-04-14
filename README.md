@@ -1,6 +1,6 @@
 # sumionAR（ロケーションAR + マーカーAR + Matterport デモ）
 
-**デモサイト:** [`https://haruto-sa.github.io/sumionAR/`](https://haruto-sa.github.io/sumionAR/)  
+**デモサイト:** [`https://haruto-sa.github.io/suimonAR/`](https://haruto-sa.github.io/suimonAR/)  
 
 位置情報ベース AR（LocAR.js + three.js）、HiroマーカーAR、Matterport 埋め込み表示をまとめたプロジェクトです。
 
