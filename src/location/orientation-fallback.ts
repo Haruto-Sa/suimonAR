@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GeoConverter } from '../utils/geo-converter';
 import { startGPSWatch } from './gps';
 import { placeModels } from './place-models';
+import { buildModelStatusMessage, formatDistanceMeters, getNearestPlacedModelDistance } from './runtime-metrics';
 import type { GPSFix } from './gps';
 import type { GeoPoint, ModelConfig } from './types';
 
@@ -15,6 +16,7 @@ type StartOrientationFallbackOptions = {
   preciseGPS: boolean;
   setStatus: (message: string) => void;
   setGPSStatus: (message: string) => void;
+  setModelStatus: (message: string) => void;
 };
 
 export interface OrientationFallbackController {
@@ -89,7 +91,7 @@ export async function startOrientationFallback(
   models: ModelConfig[],
   options: StartOrientationFallbackOptions,
 ): Promise<OrientationFallbackController> {
-  const { initialFix, worldOrigin, preciseGPS, setStatus, setGPSStatus } = options;
+  const { initialFix, worldOrigin, preciseGPS, setStatus, setGPSStatus, setModelStatus } = options;
   const converter = new GeoConverter(worldOrigin);
   const clock = new THREE.Clock();
 
@@ -107,7 +109,19 @@ export async function startOrientationFallback(
   );
 
   setStatus('YAML 座標の固定アンカーへモデルを配置しています...');
-  const { anchorRoot, mixers, clipCount, fallbackCount } = await placeModels(scene, converter, models);
+  const { anchorRoot, mixers, clipCount, fallbackCount, placedModels } = await placeModels(scene, converter, models);
+  const updateModelStatus = () => {
+    scene.updateMatrixWorld(true);
+    setModelStatus(
+      buildModelStatusMessage({
+        modelCount: placedModels.length,
+        clipCount,
+        fallbackCount,
+        nearestDistanceMeters: getNearestPlacedModelDistance(camera, placedModels),
+      }),
+    );
+  };
+  updateModelStatus();
   setStatus('方位センサーを初期化しています...');
 
   const gpsWatchId = startGPSWatch(
@@ -123,7 +137,12 @@ export async function startOrientationFallback(
             Math.pow(camera.position.z - firstModel.position.z, 2),
           ))}m`
         : '';
-      setGPSStatus(`GPS: 追跡中 ${nextAccuracyText}${distText}`);
+      scene.updateMatrixWorld(true);
+      const nearestDistance = getNearestPlacedModelDistance(camera, placedModels);
+      const distanceText =
+        nearestDistance === null ? distText : ` / 最寄り ${formatDistanceMeters(nearestDistance)}`;
+      setGPSStatus(`GPS: 追跡中 ${nextAccuracyText}${distanceText}`);
+      updateModelStatus();
     },
     (message) => {
       setStatus(message);
@@ -143,6 +162,7 @@ export async function startOrientationFallback(
     if (stopped) return;
     const delta = clock.getDelta();
     mixers.forEach((mixer) => mixer.update(delta));
+    updateModelStatus();
     renderer.render(scene, camera);
     animationFrameId = window.requestAnimationFrame(animate);
   };

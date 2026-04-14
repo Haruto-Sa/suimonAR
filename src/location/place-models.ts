@@ -9,6 +9,14 @@ export interface PlacedModelsResult {
   mixers: THREE.AnimationMixer[];
   clipCount: number;
   fallbackCount: number;
+  placedModels: PlacedModelInfo[];
+}
+
+export interface PlacedModelInfo {
+  config: ModelConfig;
+  object: THREE.Object3D;
+  clipCount: number;
+  isFallback: boolean;
 }
 
 export async function placeModels(
@@ -23,6 +31,7 @@ export async function placeModels(
   const mixers: THREE.AnimationMixer[] = [];
   let clipCount = 0;
   let fallbackCount = 0;
+  const placedModels: PlacedModelInfo[] = [];
 
   for (let i = 0; i < models.length; i++) {
     const config = models[i];
@@ -34,6 +43,7 @@ export async function placeModels(
 
     let model: THREE.Object3D;
     let animations: THREE.AnimationClip[] = [];
+    let isFallback = false;
 
     try {
       const loaded = await loadGLTF(config.modelPath);
@@ -48,6 +58,7 @@ export async function placeModels(
     } catch (error) {
       model = createFallbackMarker(config);
       fallbackCount += 1;
+      isFallback = true;
       console.warn(`GLB load failed for ${config.id}. Falling back to a fixed marker.`, error);
     }
 
@@ -64,7 +75,13 @@ export async function placeModels(
     }
 
     anchorRoot.add(model);
+    placedModels.push({
+      config,
+      object: model,
+      clipCount: animations.length,
+      isFallback,
+    });
   }
 
-  return { anchorRoot, mixers, clipCount, fallbackCount };
+  return { anchorRoot, mixers, clipCount, fallbackCount, placedModels };
 }

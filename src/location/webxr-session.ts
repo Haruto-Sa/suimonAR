@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GeoConverter } from '../utils/geo-converter';
 import type { GPSFix } from './gps';
 import { placeModels } from './place-models';
+import { buildModelStatusMessage, formatDistanceMeters, getNearestPlacedModelDistance } from './runtime-metrics';
 import type { GeoPoint, ModelConfig } from './types';
 
 type XRSessionInitWithDomOverlay = XRSessionInit & {
@@ -14,6 +15,7 @@ type StartWebXROptions = {
   preciseGPS: boolean;
   setStatus: (message: string) => void;
   setGPSStatus: (message: string) => void;
+  setModelStatus: (message: string) => void;
   overlayRoot?: Element | null;
 };
 
@@ -33,7 +35,7 @@ export async function startWebXRSession(
     throw new Error('WebXR が利用できません');
   }
 
-  const { initialFix, worldOrigin, preciseGPS, setStatus, setGPSStatus, overlayRoot } = options;
+  const { initialFix, worldOrigin, preciseGPS, setStatus, setGPSStatus, setModelStatus, overlayRoot } = options;
   const clock = new THREE.Clock();
 
   setStatus('WebXR セッションを開始しています...');
@@ -63,8 +65,29 @@ export async function startWebXRSession(
   const userOffset = converter.toLocal(initialFix);
 
   setStatus('YAML 座標の固定アンカーへモデルを配置しています...');
-  const { anchorRoot, mixers, clipCount, fallbackCount } = await placeModels(scene, converter, models);
+  const { anchorRoot, mixers, clipCount, fallbackCount, placedModels } = await placeModels(scene, converter, models);
   anchorRoot.position.set(-userOffset.x, -userOffset.y, -userOffset.z);
+  const updateModelStatus = () => {
+    scene.updateMatrixWorld(true);
+    const nearestDistance = getNearestPlacedModelDistance(camera, placedModels);
+    setGPSStatus(
+      [
+        preciseGPS ? `GPS: ${accuracyText} で原点確定` : `GPS: ${accuracyText} のため低精度で原点確定`,
+        nearestDistance === null ? null : `最寄り ${formatDistanceMeters(nearestDistance)}`,
+      ]
+        .filter(Boolean)
+        .join(' / '),
+    );
+    setModelStatus(
+      buildModelStatusMessage({
+        modelCount: placedModels.length,
+        clipCount,
+        fallbackCount,
+        nearestDistanceMeters: nearestDistance,
+      }),
+    );
+  };
+  updateModelStatus();
 
   let ended = false;
   let resolveEnd = () => {};
@@ -90,6 +113,7 @@ export async function startWebXRSession(
 
     const delta = clock.getDelta();
     mixers.forEach((mixer) => mixer.update(delta));
+    updateModelStatus();
     renderer.render(scene, camera);
   });
 

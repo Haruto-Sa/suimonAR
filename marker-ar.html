@@ -132,6 +132,19 @@
         bottom: 18px;
         font-size: 13px;
       }
+
+      #marker-animation-status {
+        bottom: 54px;
+        max-width: min(88vw, 360px);
+      }
+
+      #marker-animation-status[data-state="warn"] {
+        background: rgba(133, 88, 13, 0.84);
+      }
+
+      #marker-animation-status[data-state="error"] {
+        background: rgba(122, 28, 28, 0.9);
+      }
     </style>
   </head>
   <body>
@@ -152,6 +165,7 @@
     </div>
 
     <div class="info-overlay" id="marker-info">Hiroマーカーを映してください</div>
+    <div class="info-overlay" id="marker-animation-status" data-state="default">モデル待機中</div>
 
     <div id="marker-panel" class="marker-panel">
       <div class="marker-row">

@@ -459,6 +459,7 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
   const runtimeStatus = document.getElementById('runtime-status');
   const modeLabel = document.getElementById('mode-label');
   const gpsStatus = document.getElementById('gps-status');
+  const modelStatus = document.getElementById('model-status');
   const audioToggle = document.getElementById('audio-toggle') as HTMLButtonElement | null;
   const audioSeek = document.getElementById('audio-seek') as HTMLInputElement | null;
   const audioCurrentTimeEl = document.getElementById('audio-current-time');
@@ -505,6 +506,10 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
 
   const setGPSStatus = (message: string): void => {
     if (gpsStatus) gpsStatus.textContent = message;
+  };
+
+  const setModelStatus = (message: string): void => {
+    if (modelStatus) modelStatus.textContent = message;
   };
 
   const setProgressStatus = (message: string): void => {
@@ -589,6 +594,7 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
   const resetUIForStandby = (message: string): void => {
     setModeLabel('mode: standby');
     setGPSStatus('GPS: 開始待ち');
+    setModelStatus('待機中');
     setRuntimeStatus(message);
     setRuntimeButtonsActive(false);
     configSelect.disabled = false;
@@ -660,6 +666,7 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
       setStartupStatus(`${option.label}: ${modelCountText}`);
       setRuntimeStatus(enableAudio && primaryAudioModel ? '開始後に音声を再生できます' : '開始待ち');
       setGPSStatus('GPS: 開始待ち');
+      setModelStatus(`${config.models.length}件の設定を読み込み済み`);
       startButton.disabled = false;
 
       // Update map with new model positions
@@ -673,6 +680,7 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
       setStartupStatus(error instanceof Error ? error.message : '設定読み込みに失敗しました');
       setRuntimeStatus('開始待ち');
       setGPSStatus('GPS: 開始待ち');
+      setModelStatus('設定読み込み失敗');
       startButton.disabled = true;
     }
   };
@@ -704,6 +712,7 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
 
       showOverlay(false);
       setRuntimeStatus('AR を起動しています...');
+      setModelStatus('モデルを準備しています...');
       setRuntimeButtonsActive(true);
 
       const primaryAudioModel = getPrimaryAudioModel(loadedConfig.models);
@@ -744,6 +753,7 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
           preciseGPS: initialFix.precise,
           setStatus: setRuntimeStatus,
           setGPSStatus,
+          setModelStatus,
           overlayRoot: app,
         });
         activeRuntime = { id: runtimeId, controller };
@@ -760,6 +770,7 @@ export async function initLocationPage(options: InitLocationPageOptions = {}): P
           preciseGPS: initialFix.precise,
           setStatus: setRuntimeStatus,
           setGPSStatus,
+          setModelStatus,
         });
         activeRuntime = { id: runtimeId, controller };
       }

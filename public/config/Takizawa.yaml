@@ -13,6 +13,6 @@ models:
     lng: 141.13570198406313
     altitude: 0
     heading: -2
-    scale: 5.0
+    scale: 10.0
     realHeightMeters: 8.5
     description: "閉伊川水門 本体"

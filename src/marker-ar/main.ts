@@ -1,6 +1,9 @@
 import { MODEL_ASSET_URLS } from '../models';
 
+declare const AFRAME: any;
+
 const BUILD_BASE = (import.meta as any).env?.BASE_URL ?? '/';
+const MARKER_ANIMATION_COMPONENT = 'suimon-gltf-animation';
 
 const INITIAL_SCALE = 0.01;
 const MIN_SCALE = 0.001;
@@ -45,6 +48,16 @@ function getModel(): HTMLElement | null {
   return document.getElementById('model-suimon') as HTMLElement | null;
 }
 
+function setMarkerAnimationStatus(
+  message: string,
+  state: 'default' | 'warn' | 'error' = 'default',
+): void {
+  const status = document.getElementById('marker-animation-status');
+  if (!status) return;
+  status.textContent = message;
+  status.setAttribute('data-state', state);
+}
+
 function applyScale(value: number): void {
   currentScale = clampScale(value);
   const model = getModel();
@@ -77,23 +90,122 @@ function setSuimonModelSrc(): void {
 
   const nodes = document.querySelectorAll<HTMLElement>('[data-model-entity="suimon"]');
   nodes.forEach((el) => {
-    el.removeAttribute('animation-mixer');
+    el.setAttribute(MARKER_ANIMATION_COMPONENT, '');
     el.setAttribute('gltf-model', `url(${suimonUrl})`);
     el.setAttribute('visible', 'true');
-
-    el.addEventListener(
-      'model-loaded',
-      () => {
-        el.setAttribute('animation-mixer', 'clip: *; loop: repeat; timeScale: 1');
-        console.log('[marker-ar] animation-mixer started after model-loaded');
-      },
-      { once: true }
-    );
   });
 
   applyScale(INITIAL_SCALE);
   applyRotation(0, 0);
+  setMarkerAnimationStatus('モデル読み込み中');
   console.log('[marker-ar] suimon model src set', { url: suimonUrl, count: nodes.length });
+}
+
+function registerMarkerAnimationComponent(): void {
+  if (typeof AFRAME === 'undefined' || AFRAME.components[MARKER_ANIMATION_COMPONENT]) {
+    return;
+  }
+
+  AFRAME.registerComponent(MARKER_ANIMATION_COMPONENT, {
+    init: function (this: any) {
+      this.mixer = null;
+      this.clipCount = 0;
+      this.modelLoaded = false;
+      this.markerEl = this.el.closest('a-marker');
+
+      this.cleanupMixer = () => {
+        if (this.mixer) {
+          this.mixer.stopAllAction();
+          this.mixer = null;
+        }
+      };
+
+      this.updateFoundState = () => {
+        if (!this.modelLoaded) {
+          setMarkerAnimationStatus('モデル読み込み中');
+          return;
+        }
+
+        if (this.clipCount > 0 && this.mixer) {
+          setMarkerAnimationStatus(`クリップ ${this.clipCount}本 / 再生中`);
+          return;
+        }
+
+        setMarkerAnimationStatus('クリップ未検出 / 静止表示', 'warn');
+      };
+
+      this.onModelLoaded = (event: any) => {
+        const model = event.detail?.model ?? this.el.getObject3D('mesh');
+        this.cleanupMixer();
+        this.modelLoaded = true;
+
+        if (!model) {
+          this.clipCount = 0;
+          setMarkerAnimationStatus('モデル取得に失敗しました', 'error');
+          return;
+        }
+
+        const clips = Array.isArray(model.animations) ? model.animations : [];
+        this.clipCount = clips.length;
+
+        if (clips.length === 0) {
+          setMarkerAnimationStatus('クリップ未検出 / 静止表示', 'warn');
+          return;
+        }
+
+        this.mixer = new AFRAME.THREE.AnimationMixer(model);
+        clips.forEach((clip: any) => {
+          this.mixer.clipAction(clip).reset().play();
+        });
+        setMarkerAnimationStatus(`クリップ ${clips.length}本 / 再生中`);
+      };
+
+      this.onModelError = () => {
+        this.cleanupMixer();
+        this.modelLoaded = false;
+        this.clipCount = 0;
+        setMarkerAnimationStatus('モデル読み込み失敗', 'error');
+      };
+
+      this.onMarkerFound = () => {
+        this.updateFoundState();
+      };
+
+      this.onMarkerLost = () => {
+        if (!this.modelLoaded) {
+          setMarkerAnimationStatus('モデル読み込み中');
+          return;
+        }
+
+        if (this.clipCount > 0) {
+          setMarkerAnimationStatus(`マーカー待機中 / クリップ ${this.clipCount}本`);
+          return;
+        }
+
+        setMarkerAnimationStatus('マーカー待機中 / クリップ未検出', 'warn');
+      };
+
+      this.el.addEventListener('model-loaded', this.onModelLoaded);
+      this.el.addEventListener('model-error', this.onModelError);
+      this.markerEl?.addEventListener('markerFound', this.onMarkerFound);
+      this.markerEl?.addEventListener('markerLost', this.onMarkerLost);
+      setMarkerAnimationStatus('モデル読み込み中');
+    },
+
+    tick: function (this: any, _time: number, delta: number) {
+      if (this.mixer && delta > 0) {
+        this.mixer.update(delta / 1000);
+      }
+    },
+
+    remove: function (this: any) {
+      this.el.removeEventListener('model-loaded', this.onModelLoaded);
+      this.el.removeEventListener('model-error', this.onModelError);
+      this.markerEl?.removeEventListener('markerFound', this.onMarkerFound);
+      this.markerEl?.removeEventListener('markerLost', this.onMarkerLost);
+      this.cleanupMixer();
+    },
+  });
 }
 
 function setupPanelToggle(): void {
@@ -252,6 +364,7 @@ function setupDragRotate(): void {
   });
 }
 
+registerMarkerAnimationComponent();
 setSuimonModelSrc();
 setupPanelToggle();
 setupZoomButtons();
