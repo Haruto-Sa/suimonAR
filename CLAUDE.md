@@ -14,7 +14,7 @@ No test or lint commands are currently configured.
 
 ## Architecture Overview
 
-**sumionAR** is a multi-mode AR demo (location-based AR, marker-based AR, Matterport embed) built with Vite + TypeScript. It has **no SPA framework** — it uses multiple independent HTML entry points, each compiled as a separate bundle.
+**suimonAR** is a multi-mode AR demo (location-based AR, marker-based AR, Matterport embed) built with Vite + TypeScript. It has **no SPA framework** — it uses multiple independent HTML entry points, each compiled as a separate bundle.
 
 ### Entry Points
 
@@ -65,6 +65,6 @@ model                           # GLB filename under src/models/
 
 ### Deployment
 
-GitHub Actions (`.github/workflows/deploy.yaml`) runs `npm ci && npm run build` on push to `main` and deploys `./dist` to GitHub Pages at `/sumionAR/`. The Vite base path is `/sumionAR/` — all asset URLs depend on this.
+GitHub Actions (`.github/workflows/deploy.yaml`) runs `npm ci && npm run build` on push to `main` and deploys `./dist` to GitHub Pages at `/suimonAR/`. The Vite base path is `/suimonAR/` — all asset URLs depend on this.
 
 Camera and GPS APIs require HTTPS (or localhost). iOS requires a manual tap to reconnect device orientation after the first permission prompt.

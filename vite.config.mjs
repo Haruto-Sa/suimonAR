@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
-  base: '/sumionAR/',
+  base: '/suimonAR/',
   server: {
     host: true,
     port: 8000,

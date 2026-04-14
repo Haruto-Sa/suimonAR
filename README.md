@@ -80,7 +80,7 @@ npm install
 npm run dev
 ```
 
-`vite.config.mjs` でポート `8000` と `base: '/sumionAR/'` を設定しているため、ブラウザで:
+`vite.config.mjs` でポート `8000` と `base: '/suimonAR/'` を設定しているため、ブラウザで:
 
 - `http://localhost:8000/` → トップページ（`index.html`）
 
