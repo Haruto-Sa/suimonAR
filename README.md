@@ -1,4 +1,4 @@
-# sumionAR（ロケーションAR + マーカーAR + Matterport デモ）
+# suimonAR（ロケーションAR + マーカーAR + Matterport デモ）
 
 **デモサイト:** [`https://haruto-sa.github.io/suimonAR/`](https://haruto-sa.github.io/suimonAR/)  
 
