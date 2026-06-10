@@ -1,18 +1,12 @@
 import * as THREE from 'three';
 import * as LocAR from 'locar';
+import { yawCorrectionQuaternion } from '../shared/alignment/heading';
+import { RelativeOrientationControls } from '../shared/ar/RelativeOrientationControls';
 
 export type LatLon = {
   lat: number;
   lon: number;
 };
-
-export function metersToLatDelta(meters: number): number {
-  return meters / 111000;
-}
-
-export function metersToLonDelta(meters: number, latDeg: number): number {
-  return meters / (111000 * Math.cos((latDeg * Math.PI) / 180));
-}
 
 const DEFAULT_VIDEO_ELEMENT_ID = 'locar-video-feed';
 const ORIENTATION_WATCHDOG_MS = 5000;
@@ -68,9 +62,22 @@ export class LocationScene {
   private readonly gpsMinAccuracy: number;
   private geolocationWatchId: number | null = null;
   private gpsCallbacks: Array<(pos: { latitude: number; longitude: number; accuracy: number; altitude: number | null }) => void> = [];
+  private gpsSampleCallbacks: Array<(pos: GpsSample) => void> = [];
   private gpsSamples: GpsSample[] = [];
   private lastInjectedGps: GpsSample | null = null;
   private smoothedElevation: number | null = null;
+  private gpsInjectionPaused = false;
+
+  // ヨー補正(シルエット合わせの確定値)。orientation 更新の「後」に premultiply する。
+  // iOS では locar の DeviceOrientationControls が毎フレーム compass でヨーを
+  // 上書きするため、補正はフレーム毎の後段適用でしか成立しない。
+  private yawCorrectionDeg = 0;
+  private yawCorrectionQuat: THREE.Quaternion | null = null;
+  // 補正適用前のセンサ生姿勢(getCameraQuaternion が補正込みの値を合成するために保持)
+  private readonly lastRawQuaternion = new THREE.Quaternion();
+  private relativeControls: RelativeOrientationControls | null = null;
+  private beforeRenderCallbacks: Array<(deltaSeconds: number) => void> = [];
+  private readonly renderClock = new THREE.Clock();
 
   private _orientationStatus: OrientationStatus = 'pending';
   private orientationEventReceived = false;
@@ -247,6 +254,11 @@ export class LocationScene {
         altitude:
           typeof coords.altitude === 'number' && Number.isFinite(coords.altitude) ? coords.altitude : null,
       };
+      // 生サンプルは注入停止中も通知し続ける(確定後のGPSドリフト計測に使う)
+      for (const cb of this.gpsSampleCallbacks) {
+        try { cb(raw); } catch (e) { console.warn('[LocationScene] gps sample callback error', e); }
+      }
+      if (this.gpsInjectionPaused) return;
       const data = this.smoothGps(raw);
       if (!this.shouldInjectGps(raw, data)) return;
       this.injectGps(data);
@@ -430,13 +442,28 @@ export class LocationScene {
 
   private animate = () => {
     this.animationFrameId = window.requestAnimationFrame(this.animate);
-    if (this._orientationStatus === 'sensor' && this.deviceControls?.update) {
-      this.deviceControls.update();
-    } else if (this._orientationStatus === 'touch') {
-      this.applyTouchRotation();
-    } else if (this._orientationStatus === 'pending' && this.deviceControls?.update) {
-      // While pending, try LocAR controls (they're no-op if no sensor data)
-      this.deviceControls.update();
+    if (this.relativeControls) {
+      // ステージ3: コンパス非依存追従(オフセットは alignTo で引き継ぎ済み)
+      if (this.relativeControls.update(this.camera.quaternion)) {
+        this.lastRawQuaternion.copy(this.camera.quaternion);
+      }
+    } else {
+      if (this._orientationStatus === 'sensor' && this.deviceControls?.update) {
+        this.deviceControls.update();
+      } else if (this._orientationStatus === 'touch') {
+        this.applyTouchRotation();
+      } else if (this._orientationStatus === 'pending' && this.deviceControls?.update) {
+        // While pending, try LocAR controls (they're no-op if no sensor data)
+        this.deviceControls.update();
+      }
+      this.lastRawQuaternion.copy(this.camera.quaternion);
+      if (this.yawCorrectionQuat) {
+        this.camera.quaternion.premultiply(this.yawCorrectionQuat);
+      }
+    }
+    const delta = this.renderClock.getDelta();
+    for (const cb of this.beforeRenderCallbacks) {
+      try { cb(delta); } catch (e) { console.warn('[LocationScene] before-render callback error', e); }
     }
     this.renderer.render(this.scene, this.camera);
   };
@@ -550,6 +577,96 @@ export class LocationScene {
     this.gpsCallbacks.push(callback);
   }
 
+  /** 平滑化前の全GPSサンプルを通知する(注入停止中も発火。計測用)。 */
+  onGpsSample(callback: (pos: { latitude: number; longitude: number; accuracy: number; altitude: number | null }) => void): void {
+    this.gpsSampleCallbacks.push(callback);
+  }
+
+  /**
+   * GPS のカメラ反映を停止する(watch は維持し onGpsSample は発火し続ける)。
+   * シルエット合わせ確定後、GPS再注入でアンカーが動かないようにするために使う。
+   */
+  pauseGpsInjection(): void {
+    this.gpsInjectionPaused = true;
+  }
+
+  /** GPS反映を再開する。停止中の古い平滑化バッファは捨てて取り直す。 */
+  resumeGpsInjection(): void {
+    this.gpsInjectionPaused = false;
+    this.gpsSamples = [];
+    this.lastInjectedGps = null;
+  }
+
+  get isGpsInjectionPaused(): boolean {
+    return this.gpsInjectionPaused;
+  }
+
+  /** ヨー補正込みの現在カメラ姿勢(コピー)を返す。 */
+  getCameraQuaternion(out: THREE.Quaternion = new THREE.Quaternion()): THREE.Quaternion {
+    out.copy(this.lastRawQuaternion);
+    if (!this.relativeControls && this.yawCorrectionQuat) {
+      out.premultiply(this.yawCorrectionQuat);
+    }
+    return out;
+  }
+
+  /** カメラのワールド座標(コピー)を返す。 */
+  getCameraWorldPosition(out: THREE.Vector3 = new THREE.Vector3()): THREE.Vector3 {
+    return out.copy(this.camera.position);
+  }
+
+  /**
+   * シルエット合わせで求めたヨー補正を設定する。以後毎フレーム、orientation
+   * 更新の後にカメラへ premultiply される(sensor/touch/pending 全モードで有効)。
+   */
+  setYawCorrectionDeg(deg: number): void {
+    this.yawCorrectionDeg = deg;
+    this.yawCorrectionQuat = deg === 0 ? null : yawCorrectionQuaternion(deg);
+  }
+
+  getYawCorrectionDeg(): number {
+    return this.yawCorrectionDeg;
+  }
+
+  /**
+   * コンパス非依存追従(RelativeOrientationControls)への切り替え。
+   * 有効化時は現在の補正込み姿勢へ alignTo して視界の連続性を保ち、
+   * ヨー補正は relative 側のオフセットへ引き継ぐ。
+   * setYawCorrectionDeg() を呼んだ後に有効化すること。
+   */
+  useRelativeOrientation(enabled: boolean): void {
+    if (enabled) {
+      if (this.relativeControls) return;
+      const target = this.getCameraQuaternion();
+      const controls = new RelativeOrientationControls();
+      controls.connect();
+      controls.alignTo(target);
+      this.relativeControls = controls;
+      // 補正は relative controls のオフセットに引き継がれたため二重適用を防ぐ
+      this.yawCorrectionQuat = null;
+      try { this.deviceControls?.disconnect(); } catch (_e) { /* ignore */ }
+    } else {
+      if (!this.relativeControls) return;
+      this.relativeControls.disconnect();
+      this.relativeControls = null;
+      try { this.deviceControls?.connect(); } catch (_e) { /* ignore */ }
+    }
+  }
+
+  /** 毎フレーム描画前に呼ばれるフックを登録する(AnimationMixer 駆動などに使う)。 */
+  onBeforeRender(callback: (deltaSeconds: number) => void): void {
+    this.beforeRenderCallbacks.push(callback);
+  }
+
+  /** 地理座標に紐づかないオブジェクトをシーンへ追加する(位置合わせリグ用)。 */
+  addSceneObject(object: THREE.Object3D): void {
+    this.scene.add(object);
+  }
+
+  removeSceneObject(object: THREE.Object3D): void {
+    this.scene.remove(object);
+  }
+
   get isOriginReady(): boolean {
     return this.originReady;
   }
@@ -602,6 +719,11 @@ export class LocationScene {
       }
       this.geolocationWatchId = null;
     }
+
+    try {
+      this.relativeControls?.disconnect();
+      this.relativeControls = null;
+    } catch (_error) { /* ignore */ }
 
     try {
       this.deviceControls?.disconnect();

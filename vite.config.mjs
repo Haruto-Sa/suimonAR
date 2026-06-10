@@ -22,7 +22,12 @@ export default defineConfig({
         'heiRiver-ar': 'heiRiver-ar.html',
         'marker-print': 'marker-print.html',
         matterport: 'matterport.html',
+        'onsite-ar': 'onsite-ar.html',
       }
     }
-  }
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
 });

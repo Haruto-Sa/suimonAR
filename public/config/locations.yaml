@@ -213,3 +213,18 @@ locations:
     model: "suimon-kousin.glb"
     icon: "🌊"
     color: "#4e9bff"
+  # --- Phase 0: 県立大キャンパス検証用(シルエット合わせの実証) ---
+  # model: "box" は onsite-ar.html 専用。実寸ボックスを手続き生成して表示する。
+  # 座標は「建物のどの点を測ったか」(壁面中心・角など)を必ず記録すること。
+  # 座標取得: Google Maps で対象点を右クリック → 座標をコピー
+  - id: ipu-test-1
+    name: "県立大 検証用（建物名を記入）"
+    latitude: 39.802000      # TODO(実測): 建物の基準点
+    longitude: 141.135000    # TODO(実測)
+    baseAltitudeMeters: 0    # TODO(現地調整): 高度のズレが大きければ調整
+    realHeightMeters: 12     # TODO(実測): 建物高さ。box.height と同値にする
+    defaultRotationY: 0      # TODO(実測): 北からの建物向き(度)
+    model: "box"
+    box: { width: 30, depth: 15, height: 12 }   # TODO(実測): 実寸メートル
+    icon: "🏢"
+    color: "#ffb84e"

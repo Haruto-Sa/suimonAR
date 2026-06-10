@@ -1,26 +1,34 @@
 import * as THREE from 'three';
 import { MODEL_URLS } from '../models';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { LocationScene, metersToLatDelta, metersToLonDelta } from '../location/core';
+import { LocationScene } from '../location/core';
 import { setupUiMinimizer } from '../location/uiToggle';
+import {
+  calcBearing,
+  calcDistanceMeters,
+  latLonToEastNorth,
+  metersToLatDelta,
+  metersToLonDelta,
+} from '../shared/geo/geodesy';
+import {
+  type LocationConfig as SuimonModelConfig,
+  type ModelKind,
+  type Target,
+  fileNameToModelKind,
+  modelKindToFileName,
+  parseLocationsYaml,
+  parseTargetsYaml,
+  suimonKey,
+} from '../shared/config/locations';
+import {
+  type ModelTemplate,
+  applyModelTransform as applyTemplateTransform,
+  computeModelScale as computeTemplateScale,
+  loadModelTemplate as loadTemplateByUrl,
+  prepareModelInstance,
+} from '../shared/models/modelTemplate';
 
 // js-yaml を CDN から読み込んでいるため、グローバル宣言
 declare const jsyaml: any;
-
-type TargetModelConfig = {
-  type: string | null;
-  attributes: Record<string, unknown>;
-};
-
-type Target = {
-  id: string | null;
-  name: string;
-  lat: number;
-  lon: number;
-  icon: string;
-  color: string | null;
-  model: TargetModelConfig | null;
-};
 
 type GeoPosition = {
   latitude: number;
@@ -29,7 +37,6 @@ type GeoPosition = {
   altitude?: number | null;
 };
 
-type ModelKind = 'duck' | 'suimon' | 'wankosoba';
 type DisplayMode = 'gps' | 'xr';
 
 type PageConfig = {
@@ -42,47 +49,15 @@ type PageConfig = {
   gpsMinAccuracy: number | null;
 };
 
-type SuimonModelConfig = {
-  id: string | null;
-  name: string | null;
-  lat: number;
-  lon: number;
-  modelFile: string | null;
-  scale: number | null;
-  sizeMeters: number | null;
-  rotationYDeg: number | null;
-  height: number | null;
-  altitude: number | null;
-  baseAltitudeMeters: number | null;
-  realHeightMeters: number | null;
-  offsetEast: number | null;
-  offsetNorth: number | null;
-};
-
-type ModelTemplate = {
-  root: THREE.Object3D;
-  bboxMinY: number;
-  bboxHeight: number;
-};
-
 type WorldPlacement = {
   lat: number;
   lon: number;
   altitude: number;
 };
 
-const MODEL_KIND_TO_FILE: Record<ModelKind, string> = {
-  duck: 'Duck.glb',
-  suimon: 'suimon-kousin.glb',
-  wankosoba: 'wankosoba.glb',
-};
-
 const TARGETS_CONFIG_URL = 'config/targets.yaml';
 const PAGE_CONFIG = getPageConfig();
 const SUIMON_CONFIG_URL = PAGE_CONFIG.suimonConfigUrl || 'config/locations.yaml';
-
-const loader = new GLTFLoader();
-const modelCache = new Map<ModelKind, ModelTemplate>();
 
 const state = {
   selectedIndex: 0,
@@ -181,113 +156,6 @@ function getPageConfig(): PageConfig {
     gpsMinDistance: toNumber(read('gpsMinDistance')),
     gpsMinAccuracy: toNumber(read('gpsMinAccuracy')),
   };
-}
-
-function suimonKey(lat: number, lon: number): string {
-  return `${lat.toFixed(8)},${lon.toFixed(8)}`;
-}
-
-function normalizeModelFileName(value: string | null | undefined): string | null {
-  if (!value || typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split('/');
-  return parts[parts.length - 1].toLowerCase();
-}
-
-function fileNameToModelKind(fileName: string | null | undefined): ModelKind | null {
-  const normalized = normalizeModelFileName(fileName);
-  if (!normalized) return null;
-  if (normalized === 'duck.glb') return 'duck';
-  if (normalized === 'suimon-kousin.glb') return 'suimon';
-  if (normalized === 'wankosoba.glb') return 'wankosoba';
-  return null;
-}
-
-function modelKindToFileName(kind: ModelKind | null): string {
-  if (kind && MODEL_KIND_TO_FILE[kind]) return MODEL_KIND_TO_FILE[kind];
-  return MODEL_KIND_TO_FILE.suimon;
-}
-
-function toNumberOrNull(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function normalizeTarget(raw: any): Target | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const lat = Number(raw.latitude ?? raw.lat);
-  const lon = Number(raw.longitude ?? raw.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    console.warn('[config] 無効な座標が検出されました', raw);
-    return null;
-  }
-  return {
-    id: raw.id ?? null,
-    name:
-      typeof raw.name === 'string' && raw.name.trim()
-        ? raw.name.trim()
-        : `Target ${lat.toFixed(4)}`,
-    lat,
-    lon,
-    icon: typeof raw.icon === 'string' && raw.icon.trim() ? raw.icon : '📍',
-    color: typeof raw.color === 'string' && raw.color.trim() ? raw.color.trim() : null,
-    model: sanitizeModelConfig(raw.model),
-  };
-}
-
-function normalizeSuimonModel(raw: any): SuimonModelConfig | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const lat = Number(raw.latitude ?? raw.lat);
-  const lon = Number(raw.longitude ?? raw.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    console.warn('[suimon] 無効な座標が検出されました', raw);
-    return null;
-  }
-  const modelObject = raw.model && typeof raw.model === 'object' ? raw.model : null;
-  const modelKindFromObject = typeof modelObject?.kind === 'string' ? (modelObject.kind as string).toLowerCase() : '';
-  const modelFileFromObject =
-    typeof modelObject?.glb === 'string' && modelObject.glb.trim()
-      ? modelObject.glb.trim()
-      : modelKindFromObject === 'duck'
-      ? 'Duck.glb'
-      : modelKindFromObject === 'suimon'
-      ? 'suimon-kousin.glb'
-      : modelKindFromObject === 'wankosoba'
-      ? 'wankosoba.glb'
-      : null;
-  const rotationRaw = raw.defaultRotationY ?? raw.rotationY ?? raw.rotation;
-  return {
-    id: typeof raw.id === 'string' ? raw.id : null,
-    name: typeof raw.name === 'string' ? raw.name : null,
-    lat,
-    lon,
-    modelFile:
-      (typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : null) ??
-      modelFileFromObject,
-    scale: toNumberOrNull(raw.scale),
-    sizeMeters: toNumberOrNull(raw.defaultSize ?? raw.sizeMeters ?? raw.size ?? modelObject?.size),
-    rotationYDeg: toNumberOrNull(rotationRaw ?? modelObject?.rotationYDeg ?? modelObject?.rotation),
-    height: toNumberOrNull(raw.defaultHeight ?? raw.height ?? modelObject?.height),
-    altitude: toNumberOrNull(raw.altitude),
-    baseAltitudeMeters: toNumberOrNull(raw.baseAltitudeMeters),
-    realHeightMeters: toNumberOrNull(raw.realHeightMeters),
-    offsetEast: toNumberOrNull(raw.offsetEast ?? modelObject?.offsetEast),
-    offsetNorth: toNumberOrNull(raw.offsetNorth ?? modelObject?.offsetNorth),
-  };
-}
-
-function sanitizeModelConfig(model: any): TargetModelConfig | null {
-  if (!model || typeof model !== 'object') return null;
-  const type =
-    typeof model.type === 'string' && model.type.trim() ? (model.type.trim() as string) : null;
-  const attributes: Record<string, unknown> = {};
-  if (model.attributes && typeof model.attributes === 'object') {
-    Object.entries(model.attributes).forEach(([key, value]) => {
-      attributes[key] = value as unknown;
-    });
-  }
-  return { type, attributes };
 }
 
 function pickModelFallback(target: Target): ModelKind {
@@ -514,13 +382,7 @@ async function loadTargetsConfig(): Promise<Target[]> {
     throw new Error('js-yaml ローダーが利用できません');
   }
   const text = await response.text();
-  const parsed = jsyaml.load(text);
-  const rawTargets = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray(parsed?.targets)
-    ? parsed.targets
-    : [];
-  const normalized = (rawTargets as any[]).map(normalizeTarget).filter(Boolean) as Target[];
+  const normalized = parseTargetsYaml(text, jsyaml);
   if (!normalized.length) {
     throw new Error('有効な地点が設定されていません');
   }
@@ -543,17 +405,7 @@ async function loadSuimonConfig(): Promise<SuimonModelConfig[]> {
   }
 
   const text = await response.text();
-  const parsed = jsyaml.load(text);
-  const rawModels =
-    Array.isArray((parsed as any)?.locations)
-      ? (parsed as any).locations
-      : Array.isArray((parsed as any)?.models)
-      ? (parsed as any).models
-      : Array.isArray(parsed)
-      ? (parsed as any)
-      : [];
-
-  const normalized = (rawModels as any[]).map(normalizeSuimonModel).filter(Boolean) as SuimonModelConfig[];
+  const normalized = parseLocationsYaml(text, jsyaml);
   state.suimonModels = normalized;
   state.suimonByKey.clear();
   normalized.forEach((m) => {
@@ -598,69 +450,13 @@ function getModelUrl(kind: ModelKind, target: Target): string {
   return MODEL_URLS.duck;
 }
 
-async function loadModelTemplate(kind: ModelKind, target: Target): Promise<ModelTemplate> {
-  const cached = modelCache.get(kind);
-  if (cached) return cached;
-
-  const url = getModelUrl(kind, target);
-  const gltf = await new Promise<any>((resolve, reject) => {
-    loader.load(url, resolve, undefined, reject);
-  });
-  const root = gltf.scene || gltf.scenes?.[0];
-  if (!root) {
-    throw new Error('GLB にシーンが含まれていません');
-  }
-  const box = new THREE.Box3().setFromObject(root);
-  const height = box.max.y - box.min.y;
-
-  const modelTemplate: ModelTemplate = {
-    root,
-    bboxMinY: Number.isFinite(box.min.y) ? box.min.y : 0,
-    bboxHeight: Number.isFinite(height) && height > 0 ? height : 1,
-  };
-  modelCache.set(kind, modelTemplate);
-  return modelTemplate;
-}
-
 function computeModelScale(target: Target, template: ModelTemplate): number {
   const cfg = getSuimonConfigForTarget(target);
-
-  if (cfg && typeof cfg.realHeightMeters === 'number' && cfg.realHeightMeters > 0) {
-    const multiplier = Number.isFinite(state.modelSize) ? state.modelSize : 1;
-    return (cfg.realHeightMeters * multiplier) / template.bboxHeight;
-  }
-
-  const legacyMultiplier = cfg && typeof cfg.scale === 'number' ? cfg.scale : 1;
-  const scaleMeters = state.modelSize * legacyMultiplier;
-  return scaleMeters / 10;
-}
-
-function applyModelTransform(
-  obj: THREE.Object3D,
-  target: Target,
-  template: ModelTemplate,
-  options: { includeHeightInModelPosition: boolean; yawOffsetDeg?: number }
-): void {
-  const scale = computeModelScale(target, template);
-  const yawOffsetDeg = options.yawOffsetDeg ?? 0;
-
-  obj.scale.setScalar(scale);
-  obj.rotation.y = ((state.modelRotationDeg + yawOffsetDeg) * Math.PI) / 180;
-
-  const bottomY = template.bboxMinY * scale;
-  const heightOffset = options.includeHeightInModelPosition ? state.modelHeight : 0;
-  obj.position.set(0, heightOffset - bottomY, 0);
-}
-
-function prepareModelInstance(obj: THREE.Object3D): THREE.Object3D {
-  obj.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      child.castShadow = false;
-      child.receiveShadow = false;
-      child.frustumCulled = false;
-    }
+  return computeTemplateScale(template, {
+    realHeightMeters: cfg?.realHeightMeters ?? null,
+    legacyScale: cfg?.scale ?? null,
+    sizeValue: state.modelSize,
   });
-  return obj;
 }
 
 async function createTargetObject(
@@ -668,34 +464,15 @@ async function createTargetObject(
   options: { includeHeightInModelPosition: boolean; yawOffsetDeg?: number }
 ): Promise<THREE.Object3D> {
   const kind = pickModel(target);
-  const template = await loadModelTemplate(kind, target);
+  const template = await loadTemplateByUrl(getModelUrl(kind, target));
   const inst = template.root.clone(true);
-  applyModelTransform(inst, target, template, options);
+  applyTemplateTransform(inst, template, {
+    scale: computeModelScale(target, template),
+    rotationDeg: state.modelRotationDeg,
+    yawOffsetDeg: options.yawOffsetDeg,
+    heightOffset: options.includeHeightInModelPosition ? state.modelHeight : 0,
+  });
   return prepareModelInstance(inst);
-}
-
-function calcDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6378137;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function calcBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const phi1 = (lat1 * Math.PI) / 180;
-  const phi2 = (lat2 * Math.PI) / 180;
-  const lam1 = (lon1 * Math.PI) / 180;
-  const lam2 = (lon2 * Math.PI) / 180;
-  const y = Math.sin(lam2 - lam1) * Math.cos(phi2);
-  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(lam2 - lam1);
-  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360;
 }
 
 function bearingToCompass(bearing: number): string {
@@ -932,11 +709,12 @@ class XrModeController {
 
     const placement = buildWorldPlacement(target);
 
-    const dLat = placement.lat - this.startPosition.latitude;
-    const dLon = placement.lon - this.startPosition.longitude;
-
-    const east = dLon * 111320 * Math.cos((this.startPosition.latitude * Math.PI) / 180);
-    const north = dLat * 110540;
+    const { east, north } = latLonToEastNorth(
+      this.startPosition.latitude,
+      this.startPosition.longitude,
+      placement.lat,
+      placement.lon
+    );
     const userAltitude =
       typeof this.startPosition.altitude === 'number' && Number.isFinite(this.startPosition.altitude)
         ? this.startPosition.altitude
