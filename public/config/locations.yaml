@@ -219,11 +219,11 @@ locations:
   # 座標取得: Google Maps で対象点を右クリック → 座標をコピー
   - id: ipu-test-1
     name: "県立大 検証用（建物名を記入）"
-    latitude: 39.802000      # TODO(実測): 建物の基準点
-    longitude: 141.135000    # TODO(実測)
+    latitude: 39.802509786309464
+    longitude: 141.13549327106483     # TODO(実測): 建物の基準点の座標
     baseAltitudeMeters: 0    # TODO(現地調整): 高度のズレが大きければ調整
     realHeightMeters: 12     # TODO(実測): 建物高さ。box.height と同値にする
-    defaultRotationY: 0      # TODO(実測): 北からの建物向き(度)
+    defaultRotationY: -20      # TODO(実測): 北からの建物向き(度)
     model: "box"
     box: { width: 30, depth: 15, height: 12 }   # TODO(実測): 実寸メートル
     icon: "🏢"
